@@ -1,0 +1,108 @@
+/* web/src/styles/auth.css — the owner login screen: a single centred card gating every
+   other screen when no valid session cookie exists (internal/api/auth.go's requireSession).
+   Same visual language as sources.css/home.css (surface/line/radius/shadow-card, the same
+   "-rise" entrance, the same field/submit conventions) with fresh .auth-* class names — no
+   screen's .tsx imports another screen's .css in this codebase, and this one is no
+   exception. This is one centred card, not a new design language. */
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 32px 28px;
+  animation: auth-rise var(--duration) ease both;
+}
+
+/* Slide only, no opacity fade — same reasoning as sources.css's identical "-rise" keyframe:
+   an opacity transition would render a transient, sub-4.5:1-contrast frame of real on-screen
+   text while it plays. Dropping the opacity keyframe keeps the card axe-clean at every point
+   in the animation, not just once it settles. */
+@keyframes auth-rise {
+  from { transform: translateY(4px); }
+  to { transform: translateY(0); }
+}
+
+.auth-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 28px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.auth-subtitle {
+  margin: -8px 0 4px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.auth-field input[type="password"] {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink-body);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 9px 10px;
+}
+
+.auth-submit {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  cursor: pointer;
+  box-shadow: var(--shadow-action);
+}
+
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-error {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  background: var(--issue-soft);
+  color: var(--issue-text);
+}
+
+.auth-field input:focus-visible,
+.auth-submit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

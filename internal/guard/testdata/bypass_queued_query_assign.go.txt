@@ -1,0 +1,20 @@
+package store
+
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// No composite literal is ever written here: qq is declared zero and its SQL field is assigned
+// afterwards, so a check that only looked at composite literals never saw the query text at
+// all. The batch that runs it is built from a plain append, exactly as Queue would have.
+func WidenAssign(ctx context.Context, pool *pgxpool.Pool, dyn string) {
+	var qq pgx.QueuedQuery
+	qq.SQL = dyn
+
+	batch := &pgx.Batch{}
+	batch.QueuedQueries = append(batch.QueuedQueries, &qq)
+	pool.SendBatch(ctx, batch)
+}

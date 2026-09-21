@@ -1,0 +1,158 @@
+/* web/src/styles/tokens.css — the only file permitted to contain a colour literal. */
+:root {
+  --bg: #F3F4F6;
+  --surface: #FFFFFF;
+  --surface-rail: #FBFBFC;
+  --surface-2: #F8F9FA;
+  --ink: #14171C;
+  --ink-body: #22262D;
+  --ink-2: #5B6572;
+  /* #8A93A0 (the v1-prototype value) fails WCAG AA text contrast (2.8-3.1:1)
+     against every surface it's used on — found by Task 8's axe scan against
+     the live app, not just a snippet. #666F7D keeps the same hue/tone but is
+     dark enough to clear 4.5:1 against the darkest of those surfaces
+     (--bg #F3F4F6, ratio 4.6:1). See batch-G-report.md. */
+  --ink-3: #666F7D;
+  --line: #E4E7EB;
+  --line-soft: #EEF0F3;
+  --line-strong: #C9D0D9;
+  --accent: #2E5AAC;
+  --accent-ink: #2E5AAC;
+  --accent-soft: #EEF2FA;
+  --amber: #8A5A00;
+  --amber-dot: #C08A2E;
+  --amber-soft: #FBF0DC;
+  --ok: #3C8A5B;
+  /* --ok fails WCAG AA text contrast (4.5:1) at small sizes against --surface (4.21:1) and
+     --accent-soft (3.76:1) — found by the Agents screen's axe scan (agents.css's "active"
+     state word+dot). --ok itself stays unchanged since it's also used decoratively
+     (--type-procedure) at sizes/weights that already clear contrast elsewhere; --ok-text is
+     the same hue, darkened just enough to clear both surfaces (5.3-6:1) for small text. */
+  --ok-text: #2A7048;
+  --on-accent: #FFFFFF;
+  /* Review screen's reject-error banner (02-ui-design-v1.md section 5.3): a soft red-tinted
+     background behind --type-issue text, same "-soft" pairing convention as --accent-soft. */
+  --issue-soft: #FBEAEA;
+  /* Same reasoning as --ok-text: --type-issue is 4.33:1 against --issue-soft at small text,
+     just under 4.5:1 — found by the Agents screen's "revoked" badge. --issue-text is the same
+     hue, darkened to clear it (5.9:1). */
+  --issue-text: #9E3648;
+  /* Inline `code` spans inside rendered titles (round-2 rich-title fix): a low-alpha tint of
+     --ink rather than a flat hex, so it stays subtle over every surface a title can sit on
+     (rail rows, cards, buttons) without a separate token per surface. Deliberately faint —
+     titles are mostly code, so a heavy chip would stripe the cards. */
+  --code-bg: rgba(20, 23, 28, .055);
+
+  --type-state: #2F6F8F;
+  --type-decision: #5B5FC7;
+  --type-gotcha: #B06A00;
+  --type-procedure: #3C8A5B;
+  --type-issue: #B84A5C;
+  --type-incident: #7A8391;
+  --type-entity: #A7B0BC;
+  --type-note: #2E7A77;
+
+  /* Graph-view edge roles (spec §6.7 F-61): "link" is an untyped wikilink and always
+     renders dashed; the rest are typed relations from page frontmatter and render solid,
+     each with its own hue so the legend can distinguish them at a glance. */
+  --role-link: #8B93A0;
+  --role-about: #1F8A8C;
+  --role-specializes: #7D4FC7;
+  --role-supersedes: #C24545;
+  --role-derives: #2F9E5C;
+  --role-owns: #B08600;
+
+  --font-ui: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow-card: 0 1px 2px rgba(20, 23, 28, .04);
+  --shadow-action: 0 1px 2px rgba(20, 23, 28, .2);
+  --duration: 300ms;
+}
+
+/* Dark values derived from balise-docs/03-ui-prototype-v1.html. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171B;
+    --surface: #1B1F25;
+    --surface-rail: #181C21;
+    --surface-2: #20252C;
+    --ink: #E6E9ED;
+    --ink-body: #D7DBE1;
+    --ink-2: #A6AEB9;
+    /* Same fix as the light-mode --ink-3 above: #6F7885 fails 4.5:1 against
+       --surface-2 (#20252C), the lightest surface it's used on in this
+       theme (3.45:1). #858D99 clears it (4.6:1) at the same hue/tone. */
+    --ink-3: #858D99;
+    --line: #2A3039;
+    --line-soft: #242A32;
+    --line-strong: #3A424D;
+    --accent: #86AFD6;
+    --accent-ink: #A7C6E6;
+    --accent-soft: #1E2A38;
+    --amber: #E3AC4E;
+    --amber-dot: #C08A2E;
+    --amber-soft: #3A2E14;
+    --ok: #6FBF8C;
+    /* Dark --ok already clears 4.5:1 against every surface it sits on here (6.5:1+), so
+       --ok-text/--issue-text just reuse --ok/--type-issue rather than needing their own
+       darkened dark-mode values. */
+    --ok-text: #6FBF8C;
+    --on-accent: #14171B;
+    --issue-soft: #3A2024;
+    --issue-text: #E08A99;
+    --code-bg: rgba(230, 233, 237, .08);
+
+    --type-state: #7FB4CE;
+    --type-decision: #9DA0E8;
+    --type-gotcha: #E0A857;
+    --type-procedure: #6FBF8C;
+    --type-issue: #E08A99;
+    --type-incident: #A8B0BC;
+    --type-entity: #C3CAD4;
+    --type-note: #86CBC9;
+
+    --role-link: #8B94A0;
+    --role-about: #5FC9CB;
+    --role-specializes: #B79AE8;
+    --role-supersedes: #E68686;
+    --role-derives: #7ED9A0;
+    --role-owns: #E0B84E;
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, .3);
+    --shadow-action: 0 1px 2px rgba(0, 0, 0, .5);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #14171B; --surface: #1B1F25; --surface-rail: #181C21; --surface-2: #20252C;
+  --ink: #E6E9ED; --ink-body: #D7DBE1; --ink-2: #A6AEB9; --ink-3: #858D99;
+  --line: #2A3039; --line-soft: #242A32; --line-strong: #3A424D;
+  --accent: #86AFD6; --accent-ink: #A7C6E6; --accent-soft: #1E2A38;
+  --amber: #E3AC4E; --amber-dot: #C08A2E; --amber-soft: #3A2E14; --ok: #6FBF8C; --ok-text: #6FBF8C; --on-accent: #14171B;
+  --issue-soft: #3A2024; --issue-text: #E08A99;
+  --code-bg: rgba(230, 233, 237, .08);
+  --type-state: #7FB4CE; --type-decision: #9DA0E8; --type-gotcha: #E0A857;
+  --type-procedure: #6FBF8C; --type-issue: #E08A99; --type-incident: #A8B0BC;
+  --type-entity: #C3CAD4;
+  --type-note: #86CBC9;
+  --role-link: #8B94A0; --role-about: #5FC9CB; --role-specializes: #B79AE8;
+  --role-supersedes: #E68686; --role-derives: #7ED9A0; --role-owns: #E0B84E;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow-action: 0 1px 2px rgba(0, 0, 0, .5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration: 0ms; }
+  /* animation-delay also forced to 0: a staggered entrance (Home's three cards) would
+     otherwise still pause — invisible, since its `from` state is opacity:0 — for the delay
+     even once its own duration collapses to 0ms, which is a stagger by another name. */
+  *, *::before, *::after {
+    animation-duration: 0ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}

@@ -1,0 +1,9 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// ByScope hands back a map keyed by scope name, each value a *Queries widened to every scope --
+// another shape a single-*ast.StarExpr unwrap never reaches.
+func ByScope(pool *pgxpool.Pool) map[string]*Queries {
+	return map[string]*Queries{"all": {pool: pool, scopes: Scopes{"personal", "work", "client-globex"}}}
+}

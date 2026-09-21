@@ -1,0 +1,9 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// Wide is the bypass: a plain function, no receiver at all, that returns a Queries value
+// carrying every scope, entirely outside of NewQueries.
+func Wide(pool *pgxpool.Pool) Queries {
+	return Queries{pool: pool, scopes: Scopes{"personal", "work", "client-globex"}}
+}

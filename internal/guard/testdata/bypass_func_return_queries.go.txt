@@ -1,0 +1,12 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// Factory hands back a function that itself returns *Queries -- the Queries mention is nested
+// inside a func type, not the immediate result type, so it is only found by searching a
+// result's whole type expression rather than matching its outermost shape.
+func Factory(pool *pgxpool.Pool) func() *Queries {
+	return func() *Queries {
+		return &Queries{pool: pool, scopes: Scopes{"personal", "work", "client-globex"}}
+	}
+}

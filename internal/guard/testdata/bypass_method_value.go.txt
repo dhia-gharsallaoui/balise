@@ -1,0 +1,15 @@
+package store
+
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// RunDynamic hides a tracked pgx method behind a bound identifier: run is a method value, not
+// a selector expression, so call.Fun is a bare *ast.Ident and a guard that only recognises
+// pool.Query(...)-shaped selector calls never notices that run(ctx, dyn) is the same call.
+func RunDynamic(ctx context.Context, pool *pgxpool.Pool, dyn string) {
+	run := pool.Query
+	run(ctx, dyn)
+}

@@ -1,0 +1,7 @@
+name: entity
+description: A durable thing the vault talks about — a vendor, product, person or system
+folder: entities/
+traits: [indexed]
+max_tokens: 1200
+max_claims: 6
+staleness_days: 365

@@ -1,0 +1,15 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// The Queries struct here is declared inside a function body, so its *ast.TypeSpec is not a
+// top-level file.Decls entry and a walker that iterated file.Decls never inspected its fields
+// -- even though this shape embeds *pgxpool.Pool and so promotes Query/Exec/SendBatch straight
+// onto it. Only a whole-file ast.Inspect reaches the declaration.
+func scaffold(pool *pgxpool.Pool) any {
+	type Queries struct {
+		*pgxpool.Pool
+		scopes Scopes
+	}
+	return &Queries{Pool: pool}
+}

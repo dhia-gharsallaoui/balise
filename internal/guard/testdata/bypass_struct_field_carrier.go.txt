@@ -1,0 +1,9 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// Bundle hands back an anonymous struct carrying a *Queries field. The result type itself is
+// not Queries, but its field is, and a caller only has to reach one level in to get it out.
+func Bundle(pool *pgxpool.Pool) struct{ Q *Queries } {
+	return struct{ Q *Queries }{Q: &Queries{pool: pool, scopes: Scopes{"personal", "work", "client-globex"}}}
+}

@@ -1,0 +1,14 @@
+package store
+
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5"
+)
+
+// Tx hands back a pgx.Tx. A transaction can run arbitrary SQL exactly as freely as the pool it
+// was opened from, so it must be covered the same way *pgxpool.Pool is -- a guard that only
+// recognises *pgxpool.Pool results misses it.
+func (q *Queries) Tx(ctx context.Context) (pgx.Tx, error) {
+	return q.pool.Begin(ctx)
+}

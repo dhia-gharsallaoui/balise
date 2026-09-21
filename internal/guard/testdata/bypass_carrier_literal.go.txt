@@ -1,0 +1,19 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// Carrier is the construction bypass: nothing in NewCarrier's signature mentions Queries, so
+// guard 3 (which checks signatures) never fires -- yet the body builds a fully scoped Queries
+// field by field, without ever calling NewQueries, and hands it out through an exported field.
+// Every guard before this one asked what a function returns; none asked what constructs a
+// Queries.
+type Carrier struct{ Q *Queries }
+
+func NewCarrier(pool *pgxpool.Pool) *Carrier {
+	return &Carrier{Q: &Queries{pool: pool, scopes: Scopes{"personal", "work", "client-globex"}}}
+}
+
+// zeroQueries is the same violation in its cheapest form. It is fail-closed today only by
+// accident of nil fields -- the rule is unconditional, so an empty composite counts too, and
+// this literal must be reported exactly like the fully populated one above.
+var zeroQueries = Queries{}

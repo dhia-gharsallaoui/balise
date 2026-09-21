@@ -1,0 +1,506 @@
+/* web/src/styles/settings.css — the Settings screen (02-ui-design-v1.md section 5.6). Layout
+   parameters (200px nav column, 22px gap, single column under 1100px) are taken directly from
+   knowledge-v3.html lines 989-991's setShell/setNav style strings. Cards match the visual
+   language already established by agents.css/home.css (surface/line/radius/shadow-card, the
+   same rise-in entrance), so Settings does not invent a new card style.
+
+   Type dots: this screen defines its own `.settings-dot[data-type="…"]` rules rather than
+   reusing knowledge.css's `.type-dot` — knowledge.css has no `note` rule (nothing there has
+   ever needed to render a note-typed dot), and every one of the 8 real page types can appear
+   in this screen's Structure > Page types list, note included. Self-contained here avoids
+   editing a file this build does not own. */
+
+.settings-screen {
+  padding: 24px 28px 56px;
+  max-width: 1120px;
+  display: grid;
+  gap: 22px;
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: start;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  position: sticky;
+  top: 76px;
+}
+
+.settings-tab {
+  text-align: left;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.settings-tab:hover {
+  background: var(--surface-2);
+}
+
+.settings-tab.is-active {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}
+
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.settings-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 18px;
+  animation: settings-rise var(--duration) ease both;
+}
+
+@keyframes settings-rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.settings-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.settings-card-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.settings-card-count {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.settings-card-desc {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.settings-subhead {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink-3);
+}
+
+/* ---- Add / Edit ----
+   .settings-add is real and clickable where a create endpoint exists (Scopes) and a plain,
+   honestly-disabled stub everywhere it does not yet (Page types) -- the :disabled state below
+   carries the old always-disabled look, so a real button no longer looks unusable by default.
+   .settings-edit stays permanently disabled everywhere: renaming/removing is not offered for
+   either types or scopes (see SCOPES_EDIT_TITLE's own comment for why, for scopes). */
+
+.settings-add {
+  margin-left: auto;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.settings-add:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.settings-add:disabled {
+  color: var(--ink-2);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.settings-edit {
+  flex: none;
+  align-self: center;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* ---- Add-scope form (modeled on agents.css's .agents-add-form) ---- */
+
+.settings-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.settings-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-form-field label {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.settings-form-field input[type="text"] {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.settings-form-field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.settings-form-error {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--issue-soft);
+  color: var(--type-issue);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.settings-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-form-submit,
+.settings-form-cancel {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-form-submit {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.settings-form-cancel {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.settings-form-submit:disabled,
+.settings-form-cancel:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.settings-form-submit:focus-visible,
+.settings-form-cancel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- Rows shared by Page types / Scopes ---- */
+
+.settings-rows {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.settings-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.settings-rows > li:first-child {
+  border-top: none;
+}
+
+.settings-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-row-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-row-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.settings-row-count {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.settings-row-folder {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.settings-row-desc {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.settings-row-sub {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.settings-mono {
+  font-family: var(--font-mono);
+}
+
+.settings-empty-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* ---- Type dots (Page types list) — every real type, note included ---- */
+
+.settings-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 5px;
+}
+
+.settings-dot[data-type="state"] { background: var(--type-state); }
+.settings-dot[data-type="decision"] { background: var(--type-decision); }
+.settings-dot[data-type="gotcha"] { background: var(--type-gotcha); }
+.settings-dot[data-type="procedure"] { background: var(--type-procedure); }
+.settings-dot[data-type="issue"] { background: var(--type-issue); }
+.settings-dot[data-type="incident"] { background: var(--type-incident); }
+.settings-dot[data-type="entity"] { background: var(--type-entity); }
+.settings-dot[data-type="note"] { background: var(--type-note); }
+
+/* Scopes have no per-name colour token (unlike page types) — client scopes get the accent
+   colour so the client/non-client distinction reads at a glance, without inventing a new
+   palette for something 02 section 5.6 never asked to be colour-coded per scope. */
+.settings-scope-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 5px;
+  background: var(--ink-3);
+}
+
+.settings-scope-dot.is-client {
+  background: var(--accent);
+}
+
+/* ---- Tags: chip list ---- */
+
+.settings-tag-chips {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.settings-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  font-size: 12.5px;
+}
+
+.settings-tag-chip-name {
+  color: var(--ink-body);
+}
+
+.settings-tag-chip-count {
+  color: var(--ink-3);
+}
+
+/* ---- Sources & storage / Models: label+value grids ---- */
+
+.settings-field-grid {
+  margin: 12px 0 0;
+  display: grid;
+  gap: 10px;
+}
+
+.settings-field-row {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-field-row dt {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.settings-field-row dd {
+  margin: 0;
+}
+
+.settings-field-row select,
+.settings-field-row span:first-child {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.settings-field-value {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--ink-body);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.settings-field-value:disabled {
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+/* ---- Export: disabled stub ---- */
+
+.settings-export-note {
+  color: var(--issue-text);
+}
+
+.settings-export-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.settings-export-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.settings-export-grid select {
+  padding: 7px 10px;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.settings-export-grid select:disabled,
+.settings-export-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.settings-export-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+}
+
+.settings-export-actions button {
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+/* ---- Focus / motion / responsive ---- */
+
+.settings-tab:focus-visible,
+.settings-add:focus-visible,
+.settings-edit:focus-visible,
+.settings-export-actions button:focus-visible,
+.settings-export-grid select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+@media (max-width: 1100px) {
+  .settings-screen {
+    gap: 14px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 900px) {
+  .settings-screen {
+    padding: 16px 14px 40px;
+  }
+
+  .settings-field-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

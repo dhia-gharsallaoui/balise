@@ -1,0 +1,10 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// AllQueries hands back a slice of *Queries. returnsQueriesType, before this round, only ever
+// unwrapped one *ast.StarExpr looking for a bare Queries identifier, so a slice element type
+// buried one level deeper went unnoticed.
+func AllQueries(pool *pgxpool.Pool) []*Queries {
+	return []*Queries{{pool: pool, scopes: Scopes{"personal", "work", "client-globex"}}}
+}

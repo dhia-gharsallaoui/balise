@@ -1,0 +1,15 @@
+package store
+
+import (
+	"context"
+	"strings"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// bypassStringsJoin hides hand-built SQL behind strings.Join instead of concatenation or a
+// buffer — a third spelling of the same problem.
+func bypassStringsJoin(ctx context.Context, pool *pgxpool.Pool, scope string) {
+	sql := strings.Join([]string{"select uid from documents where scope = '", scope, "'"}, "")
+	pool.QueryRow(ctx, sql)
+}

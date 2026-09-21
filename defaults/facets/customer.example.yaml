@@ -1,0 +1,7 @@
+name: customer
+values:
+  globex: {children: {consumer: {}, labs: {}}}
+  colo: {}
+  acme: {}
+  initech: {}
+  umbrella: {}

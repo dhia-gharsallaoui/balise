@@ -1,0 +1,6 @@
+name: note
+description: A freeform record that does not fit a more specific type
+folder: notes/
+traits: [indexed]
+max_tokens: 1200
+max_claims: 6

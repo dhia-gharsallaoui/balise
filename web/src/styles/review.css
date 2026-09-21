@@ -1,0 +1,436 @@
+/* web/src/styles/review.css — the Review screen (02-ui-design-v1.md section 5.3): two
+   columns, evidence first, three buttons always in the same place. Confidence is shown as a
+   word with a coloured dot (same convention as knowledge.css's .type-dot), never a percentage. */
+
+.review-screen {
+  display: grid;
+  grid-template-columns: 420px minmax(0, 1fr);
+  align-items: start;
+  min-height: calc(100vh - 60px);
+}
+
+/* ---- Left (420px): the queue ---- */
+
+.review-queue-col {
+  min-width: 0;
+  padding: 18px 14px;
+  border-right: 1px solid var(--line);
+  background: var(--surface-rail);
+  min-height: calc(100vh - 60px);
+  position: sticky;
+  top: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.review-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.review-chip {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
+.review-chip[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-color: var(--accent-soft);
+  font-weight: 600;
+}
+
+.review-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.review-queue-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+
+.review-queue-row:last-child {
+  border-bottom: none;
+}
+
+.review-queue-row:hover {
+  background: var(--surface-2);
+}
+
+.review-queue-row.is-selected {
+  background: var(--accent-soft);
+}
+
+.review-queue-what {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.review-queue-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.review-confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.review-confidence::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.review-confidence-likely { color: var(--ok); }
+.review-confidence-possible { color: var(--amber-dot); }
+.review-confidence-unsure { color: var(--ink-3); }
+
+/* ---- Right: the item ---- */
+
+.review-detail-col {
+  min-width: 0;
+  padding: 22px 28px 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 860px;
+}
+
+.review-detail-header h3 {
+  margin: 0 0 4px;
+  font-size: 19px;
+  color: var(--ink);
+}
+
+.review-detail-sub {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-family: var(--font-mono);
+}
+
+.review-evidence h4,
+.review-claims h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+.review-evidence ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-evidence li {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-card);
+}
+
+.review-evidence blockquote {
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  font-style: italic;
+  color: var(--ink-body);
+  font-size: 13.5px;
+}
+
+.review-open-page {
+  font-size: 12.5px;
+  color: var(--accent-ink);
+  text-decoration: underline;
+  font-family: var(--font-mono);
+}
+
+.review-claims {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.review-claim-col h4 {
+  margin-bottom: 8px;
+}
+
+.review-claim-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-claim {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--ink-body);
+}
+
+.review-claim-empty {
+  color: var(--ink-3);
+  font-size: 13px;
+  margin: 0;
+}
+
+.review-mark {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  flex: none;
+}
+
+.review-mark-added { background: var(--accent-soft); color: var(--accent-ink); }
+.review-mark-reworded { background: var(--amber-soft); color: var(--amber); }
+.review-mark-retired { background: var(--line-soft); color: var(--ink-3); text-decoration: line-through; }
+
+
+.review-action-error {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--issue-soft);
+  color: var(--type-issue);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.review-reject-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  max-width: 420px;
+}
+
+.review-reject-panel label {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.review-reject-panel input {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.review-reject-panel input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.review-reject-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.review-reject-actions button {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.review-edit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  max-width: 560px;
+}
+
+.review-edit-intro {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.review-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-edit-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.review-edit-field textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.review-edit-field textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.review-edit-field textarea[aria-invalid="true"] {
+  border-color: var(--type-issue);
+}
+
+.review-edit-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.review-edit-hint.is-warning {
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.review-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.review-edit-actions button {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.review-edit-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.review-edit-actions button:focus-visible,
+.review-reject-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- Footer: three buttons, always the same place ---- */
+
+.review-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 10px;
+  padding: 14px 0 4px;
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
+}
+
+.review-action {
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  font-weight: 600;
+  box-shadow: var(--shadow-action);
+}
+
+.review-action-accept {
+  background: var(--ok);
+  color: var(--on-accent);
+}
+
+.review-action-edit {
+  background: var(--surface);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+.review-action-edit:disabled {
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+.review-action-reject {
+  background: var(--surface);
+  color: var(--type-issue);
+  border: 1px solid var(--line);
+}
+
+.review-action:disabled {
+  opacity: 0.7;
+}
+
+@media (max-width: 900px) {
+  .review-screen {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-queue-col {
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .review-claims {
+    grid-template-columns: 1fr;
+  }
+}

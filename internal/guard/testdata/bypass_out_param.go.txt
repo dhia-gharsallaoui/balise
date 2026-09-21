@@ -1,0 +1,9 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// Fill hands back a *Queries through an output parameter instead of a result, so a guard that
+// only inspects a function's Results and never its Params misses it entirely.
+func Fill(dst **Queries, pool *pgxpool.Pool) {
+	*dst = &Queries{pool: pool, scopes: Scopes{"personal", "work", "client-globex"}}
+}

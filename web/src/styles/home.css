@@ -1,0 +1,228 @@
+/* web/src/styles/home.css — the Home screen, rebuilt to match the card-grid design in
+   /tmp/balise-design/knowledge-v3.html (lines 74-121), which supersedes 02-ui-design-v1.md
+   section 5.1's plain-sentence "briefing" (see docs/superpowers/specs/2026-09-16-balise-
+   vertical-slice-design.md section 9). Values below are transcribed from that markup, literals
+   replaced with tokens — the same convention shell.css and review.css already document. */
+
+.home-page {
+  padding: 28px 28px 56px;
+  max-width: 1240px;
+}
+
+.home-greeting {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 34px;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+.home-summary {
+  margin: 0 0 26px;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.home-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.home-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  animation: rise var(--duration) ease both;
+}
+
+.home-cards > .home-card:nth-child(2) { animation-delay: calc(var(--duration) / 6); }
+.home-cards > .home-card:nth-child(3) { animation-delay: calc(var(--duration) / 3); }
+
+.home-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.home-card-head h2 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.home-card-count {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.home-open-review {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--accent-ink);
+  font-weight: 500;
+}
+
+.home-open-review:hover,
+.home-open-review:focus-visible {
+  text-decoration: underline;
+}
+
+.home-empty {
+  margin: 0;
+  padding: 14px 18px;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+
+/* ---- Waiting for you: 34px numeral | label | source ---- */
+
+.home-row-waiting {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+  width: 100%;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 14px;
+  color: var(--ink-body);
+}
+
+.home-row-waiting:hover,
+.home-row-waiting:focus-visible {
+  background: var(--surface-2);
+}
+
+/* .home-row-waiting no longer shares the .home-row class (that collided at equal specificity
+   and clobbered grid-template-columns down to .home-row's 8px/1fr — see home-v3-report.md's
+   fix-round section), so it needs its own :last-child border removal. */
+.home-row-waiting:last-child {
+  border-bottom: none;
+}
+
+.home-row-numeral {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.home-row-source {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.home-card-foot {
+  padding: 12px 18px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+/* ---- Needs attention / Changed recently: 8px dot | content ---- */
+
+.home-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.home-row:last-child {
+  border-bottom: none;
+}
+
+.home-row-attention {
+  padding: 12px 18px;
+  font-size: 14px;
+}
+
+.home-row-change {
+  width: 100%;
+  padding: 11px 18px;
+  font-size: 14px;
+}
+
+button.home-row-change:hover,
+button.home-row-change:focus-visible {
+  background: var(--surface-2);
+}
+
+/* Rendered as a plain div, never a button, when the change has no resolvable page (see
+   Home.tsx's ChangeRow) — no hover affordance to imply it does something on click. */
+.home-row-static {
+  cursor: default;
+}
+
+.home-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+}
+
+.home-dot-warn { background: var(--amber-dot); }
+.home-dot-you { background: var(--accent); }
+.home-dot-agent { background: var(--type-procedure); }
+.home-dot-connector { background: var(--ink-3); }
+
+.home-row-body {
+  min-width: 0;
+}
+
+.home-row-note {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  margin-top: 1px;
+}
+
+.home-row-title {
+  font-size: 14px;
+  color: var(--ink-body);
+}
+
+/* A "link" here is a sentence, not a button-shaped control — underline on hover/focus is the
+   only affordance. A real <button> rather than an <a> because it filters Knowledge in place
+   instead of navigating to a URL; see Home.tsx's comment by the attention row. */
+.home-link {
+  display: inline;
+  padding: 0;
+  color: var(--accent-ink);
+  text-align: left;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.home-link:hover,
+.home-link:focus-visible {
+  text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  .home-page {
+    padding: 20px 16px 40px;
+  }
+
+  .home-greeting {
+    font-size: 28px;
+  }
+
+  /* minmax(300px, 1fr) (the v3 source value, kept above for wider viewports) can't shrink
+     below 300px — combined with the rail's own 56px collapsed width (shell.css, <600px) and
+     this page's own side padding, that overflowed the viewport at 320px. Below 480px the
+     grid is already a single column in practice, so let the one remaining track size to
+     the container instead of enforcing a floor wider than some phones. */
+  .home-cards {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,10 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// RawPool is the bypass: a plain function, no receiver at all, that hands back the raw pool
+// pulled out of a *Queries argument -- a guard that requires fn.Recv != nil never sees it, even
+// though the caller ends up with exactly the same unscoped pool a method getter would hand out.
+func RawPool(q *Queries) *pgxpool.Pool {
+	return q.pool
+}

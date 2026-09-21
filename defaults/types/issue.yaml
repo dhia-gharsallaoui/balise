@@ -1,0 +1,6 @@
+name: issue
+description: An open problem being tracked toward resolution
+folder: issues/
+traits: [indexed, stateful]
+max_tokens: 1000
+max_claims: 6

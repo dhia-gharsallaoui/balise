@@ -1,0 +1,409 @@
+/* web/src/styles/graph.css — the Knowledge screen's graph view (spec §6.7 F-61).
+   This is an ego-graph centred on the page open in the reader (depth 1-2, capped at
+   MAX_EGO_NODES ~40 — see ego.ts), not the whole corpus, so there is always headroom
+   for an always-visible, per-depth-truncated label; the previous collapse-to-dot-until-
+   hover pattern existed only to survive the 138-node hairball and is gone with it. */
+
+.graph-frame {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.graph-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.graph-depth {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.graph-depth button {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-2);
+  border-radius: var(--radius-sm);
+  padding: 3px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background var(--duration) ease, color var(--duration) ease;
+}
+
+.graph-depth button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.graph-depth button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.graph-neighbour-count {
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.graph-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.graph-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: capitalize;
+}
+
+.edge-dot {
+  width: 16px;
+  height: 0;
+  border-top: 2px solid var(--role-about);
+}
+
+.edge-dot[data-role="link"] { border-top-style: dashed; border-top-color: var(--role-link); }
+.edge-dot[data-role="about"] { border-top-color: var(--role-about); }
+.edge-dot[data-role="specializes"] { border-top-color: var(--role-specializes); }
+.edge-dot[data-role="supersedes"] { border-top-color: var(--role-supersedes); }
+.edge-dot[data-role="derives"] { border-top-color: var(--role-derives); }
+.edge-dot[data-role="owns"] { border-top-color: var(--role-owns); }
+
+.graph-hint {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-canvas {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 860 / 560;
+}
+
+.graph-canvas svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Edge roles (spec §6.7 F-61): "link" is an untyped wikilink and always dashed; every
+   typed role (from page frontmatter relations) gets its own colour and a solid stroke,
+   so an unrecognised future role still reads as "typed" via the fallback below. */
+.graph-edge {
+  stroke: var(--role-about);
+  stroke-width: 1.4;
+  fill: none;
+  transition: opacity var(--duration) ease;
+}
+
+.graph-edge[data-role="link"] { stroke: var(--role-link); stroke-dasharray: 4 3; }
+.graph-edge[data-role="about"] { stroke: var(--role-about); }
+.graph-edge[data-role="specializes"] { stroke: var(--role-specializes); }
+.graph-edge[data-role="supersedes"] { stroke: var(--role-supersedes); }
+.graph-edge[data-role="derives"] { stroke: var(--role-derives); }
+.graph-edge[data-role="owns"] { stroke: var(--role-owns); }
+
+.graph-edge[data-dim="true"] {
+  opacity: 0.25;
+}
+
+/* Global view only (fix round): GraphEdges only sets data-secondary when GlobalGraph.tsx
+   passes primaryEdgeIndices — the ego view never does, so .graph-edge with no
+   data-secondary attribute (every ego edge) is untouched by this rule. A cross-link (an
+   edge treeLayout.ts's BFS didn't need to reach a node) renders thinner and fainter than a
+   tree edge, so the ~2/3 of a dense panel's edges that form its spanning tree read as the
+   primary structure and the rest read as secondary cross-references, not uniform noise. */
+.graph-edge[data-secondary="true"] {
+  stroke-width: 1;
+  opacity: 0.4;
+}
+
+.graph-edge[data-secondary="true"][data-dim="true"] {
+  opacity: 0.12;
+}
+
+.graph-node {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transform: translate(-50%, -50%);
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+  transition:
+    opacity var(--duration) ease,
+    border-color var(--duration) ease;
+}
+
+.graph-node:hover,
+.graph-node:focus-visible {
+  border-color: var(--accent);
+  z-index: 3;
+}
+
+.graph-node:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.graph-node[data-dim="true"] {
+  opacity: 0.35;
+}
+
+/* Visual hierarchy by hop distance (spec §6.7 F-61): the centre is anchored and reads
+   as a headline; depth-1 neighbours are the normal node size; depth-2 nodes are smaller
+   and dimmer so the eye lands on the centre first. */
+.graph-node[data-depth="0"] {
+  z-index: 2;
+  padding: 6px 16px 6px 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.graph-node[data-depth="1"] {
+  font-size: 12px;
+  opacity: 0.92;
+}
+
+.graph-node[data-depth="2"] {
+  font-size: 11px;
+  opacity: 0.62;
+}
+
+.graph-node-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.graph-node[data-depth="0"] .graph-node-label { max-width: 280px; }
+.graph-node[data-depth="2"] .graph-node-label { max-width: 90px; }
+
+.graph-node-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--ink-3);
+}
+
+.graph-node[data-depth="0"] .graph-node-dot { width: 12px; height: 12px; }
+.graph-node[data-depth="2"] .graph-node-dot { width: 6px; height: 6px; }
+
+.graph-node-dot[data-type="state"] { background: var(--type-state); }
+.graph-node-dot[data-type="decision"] { background: var(--type-decision); }
+.graph-node-dot[data-type="gotcha"] { background: var(--type-gotcha); }
+.graph-node-dot[data-type="procedure"] { background: var(--type-procedure); }
+.graph-node-dot[data-type="issue"] { background: var(--type-issue); }
+.graph-node-dot[data-type="incident"] { background: var(--type-incident); }
+.graph-node-dot[data-type="entity"] { background: var(--type-entity); }
+
+.graph-node-dot[data-type="note"] { background: var(--type-note); }
+
+/* Global (whole-vault) graph — GraphView's no-centre branch, GlobalGraph.tsx. Five scopes
+   never share an edge (scope is the security boundary), so this renders as five
+   independent panels — "islands" — rather than one merged canvas: each panel gets its own
+   heading, its own force-simulated region, and (when it has any) its own isolated-node
+   "shelf" below that. At 139-node density a node is a small dot (not the ego view's
+   always-labelled pill): the label only appears on hover/focus, or permanently for the
+   small set of high-degree "hub" nodes that act as landmarks. */
+
+.global-summary {
+  margin: 0;
+  padding: 6px 16px;
+  color: var(--ink-3);
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.global-panels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px;
+}
+
+.global-panel {
+  flex: 1 1 420px;
+  min-width: 280px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.global-panel[data-size="large"] {
+  flex-basis: 480px;
+}
+
+/* Fix round: the two scopes big enough to need a spanning-tree layout (Work, Client-Globex)
+   get a wider column in addition to a taller one (globalLayout.ts's connectedHeightFor) —
+   more room in both axes for the radial tree to fan out into, not just a taller box for
+   the same width. min-width: 280px above still lets this wrap down to one column at
+   narrow viewports the same way "large" already does. */
+.global-panel[data-size="xlarge"] {
+  flex-basis: 640px;
+}
+
+.global-panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.global-panel-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  text-transform: capitalize;
+}
+
+.global-panel-header span {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.global-panel-canvas {
+  position: relative;
+  width: 100%;
+  background: var(--surface);
+}
+
+.global-panel-canvas svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.global-panel-shelf {
+  border-top: 1px solid var(--line-soft);
+}
+
+.global-shelf-label {
+  margin: 0;
+  padding: 6px 12px 0;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.global-panel-canvas-shelf {
+  background: var(--surface-2);
+}
+
+.global-node {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transform: translate(-50%, -50%);
+  border: none;
+  background: none;
+  padding: 2px;
+  cursor: pointer;
+  transition: opacity var(--duration) ease;
+}
+
+.global-node:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.global-node[data-dim="true"] {
+  opacity: 0.3;
+}
+
+.global-node-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--ink-3);
+  box-shadow: 0 0 0 1px var(--surface);
+}
+
+.global-node[data-isolated="true"] .global-node-dot {
+  background: transparent;
+  border: 1.5px solid var(--ink-3);
+  width: 6px;
+  height: 6px;
+}
+
+.global-node[data-hub="true"] .global-node-dot {
+  width: 11px;
+  height: 11px;
+}
+
+.global-node-dot[data-type="state"] { background: var(--type-state); }
+.global-node-dot[data-type="decision"] { background: var(--type-decision); }
+.global-node-dot[data-type="gotcha"] { background: var(--type-gotcha); }
+.global-node-dot[data-type="procedure"] { background: var(--type-procedure); }
+.global-node-dot[data-type="issue"] { background: var(--type-issue); }
+.global-node-dot[data-type="incident"] { background: var(--type-incident); }
+.global-node-dot[data-type="entity"] { background: var(--type-entity); }
+.global-node-dot[data-type="note"] { background: var(--type-note); }
+
+.global-node[data-isolated="true"] .global-node-dot[data-type="state"],
+.global-node[data-isolated="true"] .global-node-dot[data-type="decision"],
+.global-node[data-isolated="true"] .global-node-dot[data-type="gotcha"],
+.global-node[data-isolated="true"] .global-node-dot[data-type="procedure"],
+.global-node[data-isolated="true"] .global-node-dot[data-type="issue"],
+.global-node[data-isolated="true"] .global-node-dot[data-type="incident"],
+.global-node[data-isolated="true"] .global-node-dot[data-type="entity"],
+.global-node[data-isolated="true"] .global-node-dot[data-type="note"] {
+  background: transparent;
+}
+
+.global-node-label {
+  display: none;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.global-node[data-hub="true"] .global-node-label {
+  display: inline-block;
+  font-weight: 600;
+}
+
+.global-node:hover .global-node-label,
+.global-node:focus-visible .global-node-label {
+  display: inline-block;
+  z-index: 3;
+}

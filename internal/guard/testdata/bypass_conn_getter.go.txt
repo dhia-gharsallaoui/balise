@@ -1,0 +1,14 @@
+package store
+
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// Acquire hands back a raw *pgxpool.Conn. A checked-out connection answers arbitrary SQL
+// exactly like the pool it was acquired from, so it must be covered the same way
+// *pgxpool.Pool is.
+func (q *Queries) Acquire(ctx context.Context) (*pgxpool.Conn, error) {
+	return q.pool.Acquire(ctx)
+}

@@ -1,0 +1,10 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// Queries here embeds *pgxpool.Pool, which promotes every pool method (Query, Exec, ...)
+// straight onto Queries, letting any caller run unscoped SQL directly against the pool.
+type Queries struct {
+	*pgxpool.Pool
+	scopes Scopes
+}

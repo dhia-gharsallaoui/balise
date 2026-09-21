@@ -1,0 +1,16 @@
+# defaults/scopes.yaml — scopes declared to exist even before any page lands in them.
+#
+# A scope normally comes into being the moment a page under it is written (see
+# cmd/balise/main.go's discoverVaultScopes / internal/store's DiscoverScopes). That means an
+# empty scope is not a real, selectable thing: there is nowhere to "create a scope" without
+# first writing a page into it, which is backwards for anyone setting one up ahead of time
+# from Settings.
+#
+# This file is the other half: scopes declared here exist immediately, with zero pages,
+# alongside whatever the vault/database already contain. The effective scope set a running
+# server enforces is always declared ∪ discovered — see internal/store/scopes_discovery.go's
+# EffectiveScopes. Adding a name here is add-only: nothing in this codebase renames or
+# removes an entry, because a rename would orphan every page already filed under the old
+# name and silently change what existing agent tokens refer to, and a delete is destructive
+# for the same reason. POST /api/scopes appends to this list; nothing else may write here.
+scopes: []

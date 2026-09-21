@@ -1,0 +1,8 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// Unwrap is the bypass: a method that hands the raw, unscoped pool back to any caller.
+func (q *Queries) Unwrap() *pgxpool.Pool {
+	return q.pool
+}

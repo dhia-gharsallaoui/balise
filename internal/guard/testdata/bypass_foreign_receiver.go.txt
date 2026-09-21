@@ -1,0 +1,14 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// Pool stands in for some unrelated type that could be given a method returning Queries,
+// entirely bypassing NewQueries and whatever scope it was constructed with.
+type Pool struct {
+	pool *pgxpool.Pool
+}
+
+// All is the bypass: a method on a foreign receiver that hands back every scope.
+func (p *Pool) All() *Queries {
+	return &Queries{pool: p.pool, scopes: Scopes{"personal", "work", "client-globex"}}
+}

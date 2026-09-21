@@ -1,0 +1,11 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// WideVar is guard 3's reachability bypass: a package-level variable holding a function
+// literal that returns *Queries, not a *ast.FuncDecl, so a guard that only inspected
+// file.Decls for FuncDecl skipped it even though it constructs an every-scope Queries exactly
+// like Wide does as a named function.
+var WideVar = func(pool *pgxpool.Pool) *Queries {
+	return &Queries{pool: pool, scopes: Scopes{"personal", "work", "client-globex"}}
+}

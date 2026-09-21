@@ -1,0 +1,16 @@
+# defaults/tenants.example.yaml — generic placeholder tenant list, shipped so a fresh
+# clone has a working default. Copy this to defaults/tenants.yaml (or just start editing
+# tenants.yaml directly) to declare your own; a real tenants.yaml, when present, always
+# wins over this file — see internal/registry.LoadTenants.
+#
+# Which customer/* facet values name an actual tenant. The customer/ facet namespace
+# also carries a datacenter (colo) and the owner's own internal categories (platform,
+# intranet); neither is a tenant, so neither gets its own client scope or counts toward
+# multi-customer detection. This is data, not a hardcoded Go map, because the security
+# partition (which pages belong to which customer's scope) depends on it and the owner
+# must be able to correct it without a recompile.
+#
+# colo is deliberately absent — it is the shared datacenter acme's and globex's
+# infrastructure sits inside, not a tenant of its own. platform and intranet are also
+# absent: the owner's own internal categories.
+tenants: [acme, globex, initech, umbrella]

@@ -1,0 +1,18 @@
+package store
+
+import (
+	"bytes"
+	"context"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// bypassBufferBuilder hides the same hand-built SQL behind a bytes.Buffer instead of a `+`
+// concatenation — a different spelling of the identical problem.
+func bypassBufferBuilder(ctx context.Context, pool *pgxpool.Pool, scope string) {
+	var buf bytes.Buffer
+	buf.WriteString("select uid from documents where scope = '")
+	buf.WriteString(scope)
+	buf.WriteString("'")
+	pool.Exec(ctx, buf.String())
+}

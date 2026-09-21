@@ -1,0 +1,16 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// Registry is reachable from anywhere in the package, but the function literal it ends up
+// holding is declared by a var *inside a function body* -- not a top-level file.Decls entry --
+// so a walker that iterated file.Decls never saw its *Queries result at all. Only a whole-file
+// ast.Inspect reaches wideNested.
+var Registry func() *Queries
+
+func Register(pool *pgxpool.Pool) {
+	var wideNested = func() *Queries {
+		return &Queries{pool: pool, scopes: Scopes{"personal", "work", "client-globex"}}
+	}
+	Registry = wideNested
+}

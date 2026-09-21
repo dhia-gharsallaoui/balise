@@ -1,0 +1,9 @@
+name: vendor
+values:
+  azure:
+    aliases: [az, microsoft-azure]
+    children:
+      expressroute: {aliases: [er, ergw]}
+      aks: {}
+      azfw: {}
+  fortinet: {}

@@ -1,0 +1,16 @@
+package store
+
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// bypassHoistedLiteral is what a guard checking only the literal-ness of the call-site
+// argument would miss: the SQL is still spelled out as literal pieces, but those pieces are
+// concatenated into one string before reaching Query, so the argument at the call site is a
+// binary expression, not a literal.
+func bypassHoistedLiteral(ctx context.Context, pool *pgxpool.Pool, scope string) {
+	head := "select uid from documents where scope = '"
+	pool.Query(ctx, head+scope+"'")
+}

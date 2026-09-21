@@ -1,0 +1,17 @@
+package store
+
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// Unscoped is the reachability bypass a reviewer planted to prove guard 2 was blind to it: a
+// package-level variable holding a function literal, not a *ast.FuncDecl, so a guard that only
+// walked file.Decls looking for FuncDecl skipped it entirely -- even though its body runs the
+// exact same hand-concatenated SQL that bypassHoistedLiteral spells out as a named function.
+var Unscoped = func(ctx context.Context, pool *pgxpool.Pool, scope string) {
+	verb := "select uid"
+	tbl := "documents"
+	pool.Exec(ctx, verb+" from "+tbl+" where scope='"+scope+"'")
+}

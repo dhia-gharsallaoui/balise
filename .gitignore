@@ -1,0 +1,43 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+dist/
+.env
+.DS_Store
+bin/
+.playwright-mcp/
+balise-*.png
+home-truth-live.png
+web/graph-view-*.png
+web/review-live-*.png
+web/home-live-*.png
+web/global-graph-*.png
+web/knowledge-code-*.png
+web/knowledge-live-*.png
+web/sources-*.png
+.run/
+
+# Ad-hoc verification screenshots. The real visual-regression baselines live in
+# web/tests/e2e/visual.spec.ts-snapshots/ and stay tracked — this pattern has a single
+# path segment, so it matches only the loose ones agents drop at the top of web/.
+web/*.png
+
+# Real customer/tenant configuration. The tracked *.example.yaml siblings ship generic
+# placeholder data so a fresh clone works out of the box; the loader in internal/registry
+# prefers the real file here when present, falling back to the .example otherwise. These
+# stay on disk for the owner and are only removed from version control.
+/defaults/tenants.yaml
+/defaults/spaces.yaml
+/defaults/facets/customer.yaml
+
+# Real client fixtures used only for local development against genuine customer content.
+# Kept in their own subdirectory (rather than alongside the generic fixtures) because
+# internal/indexer's fixture tests glob defaults/fixtures/*.md directly and must only ever
+# pick up the tracked, generic set.
+/defaults/fixtures/local/
+
+# Private design material — not meant for the public repo. See README.md instead.
+/balise-docs/
+/docs/superpowers/

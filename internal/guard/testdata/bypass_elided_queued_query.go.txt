@@ -1,0 +1,15 @@
+package store
+
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// The inner literal here spells no type of its own: it is elided, inferred from the enclosing
+// []*pgx.QueuedQuery element type, so its lit.Type is nil and a check that required lit.Type to
+// name QueuedQuery skipped it entirely -- and the batch ran hand-built, unscoped SQL.
+func WidenElided(ctx context.Context, pool *pgxpool.Pool, dyn string) {
+	pool.SendBatch(ctx, &pgx.Batch{QueuedQueries: []*pgx.QueuedQuery{{SQL: dyn}}})
+}

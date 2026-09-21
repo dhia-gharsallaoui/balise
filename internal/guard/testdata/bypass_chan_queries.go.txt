@@ -1,0 +1,11 @@
+package store
+
+import "github.com/jackc/pgx/v5/pgxpool"
+
+// Stream hands back a receive-only channel of *Queries instead of a *Queries directly.
+func Stream(pool *pgxpool.Pool) <-chan *Queries {
+	ch := make(chan *Queries, 1)
+	ch <- &Queries{pool: pool, scopes: Scopes{"personal", "work", "client-globex"}}
+	close(ch)
+	return ch
+}

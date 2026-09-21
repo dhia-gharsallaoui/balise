@@ -1,0 +1,64 @@
+# defaults/spaces.example.yaml — generic placeholder space tree, shipped so a fresh clone
+# has a working default. A real spaces.yaml, when present, always wins over this file —
+# see internal/registry.LoadSpaces.
+#
+# Space tree. One top-level space per scope — spaces never cross scopes, so a "Clients"
+# parent spanning several is not expressible. Every tenant is listed the same way; none
+# is special-cased. There is no `personal` scope in use today: all of this is work, which
+# is why `work` is named for what it holds (shared platform and infrastructure) rather
+# than standing in opposition to the client scopes.
+#
+# Sub-spaces are drawn from the tags actually present in each scope, so none is empty.
+
+- name: Platform
+  scope: work
+  filter: {tags: []}
+  children:
+    - name: Azure
+      filter: {tags: ["vendor/azure/**"]}
+    - name: Terraform & IaC
+      filter: {tags: ["layer/iac"]}
+    - name: Network
+      filter: {tags: ["layer/network"]}
+    - name: Identity
+      filter: {tags: ["layer/identity"]}
+    - name: Observability
+      filter: {tags: ["layer/observability"]}
+    - name: Agents
+      filter: {tags: ["layer/agents"]}
+
+- name: Globex
+  scope: client-globex
+  filter: {tags: []}
+  children:
+    - name: Azure
+      filter: {tags: ["vendor/azure/**"]}
+    - name: Network
+      filter: {tags: ["layer/network"]}
+    - name: Compute
+      filter: {tags: ["layer/compute"]}
+    - name: Storage
+      filter: {tags: ["layer/storage"]}
+    - name: Observability
+      filter: {tags: ["layer/observability"]}
+
+- name: Acme
+  scope: client-acme
+  filter: {tags: []}
+  children:
+    - name: Network
+      filter: {tags: ["layer/network"]}
+    - name: Compute
+      filter: {tags: ["layer/compute"]}
+    - name: Azure
+      filter: {tags: ["vendor/azure/**"]}
+    - name: Fabric & FortiGate
+      filter: {tags: ["layer/fabric"]}
+
+- name: Initech
+  scope: client-initech
+  filter: {tags: []}
+
+- name: Umbrella
+  scope: client-umbrella
+  filter: {tags: []}

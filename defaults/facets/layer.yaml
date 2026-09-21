@@ -1,0 +1,2 @@
+name: layer
+values: {network: {}, compute: {}, storage: {}, identity: {}, observability: {}, iac: {}, security: {}}
