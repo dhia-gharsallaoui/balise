@@ -1,8 +1,9 @@
 /* web/src/styles/graph.css — the Knowledge screen's graph view (spec §6.7 F-61).
-   This is an ego-graph centred on the page open in the reader (depth 1-2, capped at
-   MAX_EGO_NODES ~40 — see ego.ts), not the whole corpus, so there is always headroom
-   for an always-visible, per-depth-truncated label; the previous collapse-to-dot-until-
-   hover pattern existed only to survive the 138-node hairball and is gone with it. */
+   Both the ego graph (centred on the open page) and the whole-vault global graph (no page
+   open) now render through Cytoscape (see GraphCanvas.tsx / useCytoscapeGraph.ts /
+   graphElements.ts / graphStyle.ts) instead of a hand-rolled SVG force simulation and a
+   bespoke radial-tree layout — the chrome around the canvas (controls, legend, depth
+   toggle) is unchanged from before that rewrite. */
 
 .graph-frame {
   background: var(--surface);
@@ -90,147 +91,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-.graph-canvas {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 860 / 560;
-}
-
-.graph-canvas svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-/* Edge roles (spec §6.7 F-61): "link" is an untyped wikilink and always dashed; every
-   typed role (from page frontmatter relations) gets its own colour and a solid stroke,
-   so an unrecognised future role still reads as "typed" via the fallback below. */
-.graph-edge {
-  stroke: var(--role-about);
-  stroke-width: 1.4;
-  fill: none;
-  transition: opacity var(--duration) ease;
-}
-
-.graph-edge[data-role="link"] { stroke: var(--role-link); stroke-dasharray: 4 3; }
-.graph-edge[data-role="about"] { stroke: var(--role-about); }
-.graph-edge[data-role="specializes"] { stroke: var(--role-specializes); }
-.graph-edge[data-role="supersedes"] { stroke: var(--role-supersedes); }
-.graph-edge[data-role="derives"] { stroke: var(--role-derives); }
-.graph-edge[data-role="owns"] { stroke: var(--role-owns); }
-
-.graph-edge[data-dim="true"] {
-  opacity: 0.25;
-}
-
-/* Global view only (fix round): GraphEdges only sets data-secondary when GlobalGraph.tsx
-   passes primaryEdgeIndices — the ego view never does, so .graph-edge with no
-   data-secondary attribute (every ego edge) is untouched by this rule. A cross-link (an
-   edge treeLayout.ts's BFS didn't need to reach a node) renders thinner and fainter than a
-   tree edge, so the ~2/3 of a dense panel's edges that form its spanning tree read as the
-   primary structure and the rest read as secondary cross-references, not uniform noise. */
-.graph-edge[data-secondary="true"] {
-  stroke-width: 1;
-  opacity: 0.4;
-}
-
-.graph-edge[data-secondary="true"][data-dim="true"] {
-  opacity: 0.12;
-}
-
-.graph-node {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transform: translate(-50%, -50%);
-  padding: 4px 10px 4px 4px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-card);
-  font-size: 12px;
-  color: var(--ink);
-  white-space: nowrap;
-  transition:
-    opacity var(--duration) ease,
-    border-color var(--duration) ease;
-}
-
-.graph-node:hover,
-.graph-node:focus-visible {
-  border-color: var(--accent);
-  z-index: 3;
-}
-
-.graph-node:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.graph-node[data-dim="true"] {
-  opacity: 0.35;
-}
-
-/* Visual hierarchy by hop distance (spec §6.7 F-61): the centre is anchored and reads
-   as a headline; depth-1 neighbours are the normal node size; depth-2 nodes are smaller
-   and dimmer so the eye lands on the centre first. */
-.graph-node[data-depth="0"] {
-  z-index: 2;
-  padding: 6px 16px 6px 6px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.graph-node[data-depth="1"] {
-  font-size: 12px;
-  opacity: 0.92;
-}
-
-.graph-node[data-depth="2"] {
-  font-size: 11px;
-  opacity: 0.62;
-}
-
-.graph-node-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 140px;
-}
-
-.graph-node[data-depth="0"] .graph-node-label { max-width: 280px; }
-.graph-node[data-depth="2"] .graph-node-label { max-width: 90px; }
-
-.graph-node-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-  background: var(--ink-3);
-}
-
-.graph-node[data-depth="0"] .graph-node-dot { width: 12px; height: 12px; }
-.graph-node[data-depth="2"] .graph-node-dot { width: 6px; height: 6px; }
-
-.graph-node-dot[data-type="state"] { background: var(--type-state); }
-.graph-node-dot[data-type="decision"] { background: var(--type-decision); }
-.graph-node-dot[data-type="gotcha"] { background: var(--type-gotcha); }
-.graph-node-dot[data-type="procedure"] { background: var(--type-procedure); }
-.graph-node-dot[data-type="issue"] { background: var(--type-issue); }
-.graph-node-dot[data-type="incident"] { background: var(--type-incident); }
-.graph-node-dot[data-type="entity"] { background: var(--type-entity); }
-
-.graph-node-dot[data-type="note"] { background: var(--type-note); }
-
-/* Global (whole-vault) graph — GraphView's no-centre branch, GlobalGraph.tsx. Five scopes
-   never share an edge (scope is the security boundary), so this renders as five
-   independent panels — "islands" — rather than one merged canvas: each panel gets its own
-   heading, its own force-simulated region, and (when it has any) its own isolated-node
-   "shelf" below that. At 139-node density a node is a small dot (not the ego view's
-   always-labelled pill): the label only appears on hover/focus, or permanently for the
-   small set of high-degree "hub" nodes that act as landmarks. */
-
+/* Global-view summary line, above the canvas — same treatment the old per-panel headers
+   used (border-bottom, ink-3, small caps-less label), just one line for the whole vault
+   now that scopes are compound nodes on one canvas rather than separate panels. */
 .global-summary {
   margin: 0;
   padding: 6px 16px;
@@ -239,171 +102,124 @@
   border-bottom: 1px solid var(--line-soft);
 }
 
-.global-panels {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  padding: 16px;
-}
+/* --- Cytoscape stage ------------------------------------------------------------------ */
 
-.global-panel {
-  flex: 1 1 420px;
-  min-width: 280px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  overflow: hidden;
-}
-
-.global-panel[data-size="large"] {
-  flex-basis: 480px;
-}
-
-/* Fix round: the two scopes big enough to need a spanning-tree layout (Work, Client-Globex)
-   get a wider column in addition to a taller one (globalLayout.ts's connectedHeightFor) —
-   more room in both axes for the radial tree to fan out into, not just a taller box for
-   the same width. min-width: 280px above still lets this wrap down to one column at
-   narrow viewports the same way "large" already does. */
-.global-panel[data-size="xlarge"] {
-  flex-basis: 640px;
-}
-
-.global-panel-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.global-panel-header h3 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-  text-transform: capitalize;
-}
-
-.global-panel-header span {
-  color: var(--ink-3);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.global-panel-canvas {
+/* The wheel-guard ancestor (useCytoscapeGraph's capture-phase listener lives on this DOM
+   node): plain scroll/trackpad wheel over the graph keeps scrolling the page, exactly like
+   scrolling over any other embedded canvas widget would; Ctrl/Cmd+scroll or a pinch zooms
+   the graph instead. */
+.graph-stage {
   position: relative;
+}
+
+.cy-container {
   width: 100%;
+  height: 560px;
   background: var(--surface);
 }
 
-.global-panel-canvas svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+@media (max-width: 640px) {
+  .cy-container {
+    height: 420px;
+  }
 }
 
-.global-panel-shelf {
+.graph-zoom-controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 4;
+}
+
+.graph-zoom-controls button {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+  transition: background var(--duration) ease, border-color var(--duration) ease;
+}
+
+.graph-zoom-controls button:hover {
+  border-color: var(--accent);
+}
+
+.graph-zoom-controls button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A visible reminder of the modifier-gated wheel-zoom, sitting under the canvas rather than
+   overlapping it. Screen-reader users get the same information from the a11y list's own
+   buttons instead (real focusable elements, no pointer gesture required at all). */
+.graph-hint-scroll {
+  margin: 0;
+  padding: 6px 16px;
+  color: var(--ink-3);
+  font-size: 11.5px;
   border-top: 1px solid var(--line-soft);
 }
 
-.global-shelf-label {
-  margin: 0;
-  padding: 6px 12px 0;
-  color: var(--ink-3);
-  font-size: 11px;
-}
-
-.global-panel-canvas-shelf {
-  background: var(--surface-2);
-}
-
-.global-node {
+/* --- Accessible equivalent -------------------------------------------------------------
+   Cytoscape draws to a <canvas>: invisible to screen readers, unreachable by keyboard.
+   `.cy-container`'s `role="img"` collapses that whole subtree into one atomic accessible
+   object, and GraphA11yList renders this list as a plain DOM sibling so every node and every
+   scope grouping still has a focusable, labelled equivalent. Visually hidden, never
+   display:none — that would pull it out of both the accessibility tree and the tab order. */
+.sr-only {
   position: absolute;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  transform: translate(-50%, -50%);
-  border: none;
-  background: none;
-  padding: 2px;
-  cursor: pointer;
-  transition: opacity var(--duration) ease;
-}
-
-.global-node:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-
-.global-node[data-dim="true"] {
-  opacity: 0.3;
-}
-
-.global-node-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-  background: var(--ink-3);
-  box-shadow: 0 0 0 1px var(--surface);
-}
-
-.global-node[data-isolated="true"] .global-node-dot {
-  background: transparent;
-  border: 1.5px solid var(--ink-3);
-  width: 6px;
-  height: 6px;
-}
-
-.global-node[data-hub="true"] .global-node-dot {
-  width: 11px;
-  height: 11px;
-}
-
-.global-node-dot[data-type="state"] { background: var(--type-state); }
-.global-node-dot[data-type="decision"] { background: var(--type-decision); }
-.global-node-dot[data-type="gotcha"] { background: var(--type-gotcha); }
-.global-node-dot[data-type="procedure"] { background: var(--type-procedure); }
-.global-node-dot[data-type="issue"] { background: var(--type-issue); }
-.global-node-dot[data-type="incident"] { background: var(--type-incident); }
-.global-node-dot[data-type="entity"] { background: var(--type-entity); }
-.global-node-dot[data-type="note"] { background: var(--type-note); }
-
-.global-node[data-isolated="true"] .global-node-dot[data-type="state"],
-.global-node[data-isolated="true"] .global-node-dot[data-type="decision"],
-.global-node[data-isolated="true"] .global-node-dot[data-type="gotcha"],
-.global-node[data-isolated="true"] .global-node-dot[data-type="procedure"],
-.global-node[data-isolated="true"] .global-node-dot[data-type="issue"],
-.global-node[data-isolated="true"] .global-node-dot[data-type="incident"],
-.global-node[data-isolated="true"] .global-node-dot[data-type="entity"],
-.global-node[data-isolated="true"] .global-node-dot[data-type="note"] {
-  background: transparent;
-}
-
-.global-node-label {
-  display: none;
-  white-space: nowrap;
-  font-size: 11px;
-  color: var(--ink-2);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 1px 5px;
-  max-width: 160px;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.global-node[data-hub="true"] .global-node-label {
-  display: inline-block;
+.sr-only:focus-within {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+.graph-a11y-scope {
+  display: block;
+}
+
+.graph-a11y-scope-toggle {
   font-weight: 600;
 }
 
-.global-node:hover .global-node-label,
-.global-node:focus-visible .global-node-label {
-  display: inline-block;
-  z-index: 3;
+.graph-a11y-node {
+  /* Real, focusable — this transition is what reduced-motion e2e checks assert against,
+     since Cytoscape's canvas nodes have no DOM CSS transitions of their own to inspect. */
+  transition: outline-color var(--duration) ease;
+}
+
+.graph-a11y-node:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-a11y-node {
+    transition-duration: 0.001ms;
+  }
 }

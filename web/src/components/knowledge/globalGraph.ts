@@ -4,33 +4,31 @@ import type { GraphEdge, GraphNode, GraphResponse } from "../../lib/types";
 // all" the owner asked for, alongside the existing ego view (unchanged — see ego.ts).
 // Live data (139 nodes / 190 edges) is five scopes that never share an edge with each
 // other (scope is the security boundary), so this reads as five islands rather than one
-// hairball: group by scope first, and within each scope split nodes that have at least one
-// relation ("connected", force-laid-out by the existing layoutGraph) from nodes that have
-// none ("isolated" — shelved separately in a deterministic grid, see globalLayout.ts).
-//
-// A node above this degree is rendered as a small labelled "hub" landmark instead of a
-// plain dot (globalLayout.ts / GlobalGraphNodes.tsx) — chosen from the live corpus so the
-// labelled set stays genuinely small: degree>=5 is 26 nodes, degree>=6 is 18, degree>=7 is
-// 12 (all 12 in "work" and "client-globex", the two scopes big enough to have any hubs at all).
-export const HUB_DEGREE_THRESHOLD = 7;
+// hairball — but where the old hand-rolled layout turned that fact into five separate
+// force-simulated <svg> panels, the Cytoscape rewrite turns it into five compound
+// ("parent") nodes on one shared canvas: a scope is a real container node other nodes sit
+// inside, not a layout-only convention. That single-canvas shape needs a flatter data
+// model than the old ScopePanel's connected/isolated split — fcose's `tile: true` already
+// places degree-0 nodes sensibly on its own, so there is nothing left for this module to
+// decide about isolation; it only groups, filters and measures.
 
-export interface ScopePanel {
+export interface ScopeGroup {
   scope: string;
-  // Nodes with at least one relation within the filtered graph, uid-sorted.
-  connected: GraphNode[];
-  // Nodes with none, uid-sorted — see globalLayout.ts for how these are rendered.
-  isolated: GraphNode[];
-  // Edges with both endpoints in this scope.
+  // Every node in this scope (connected or not), uid-sorted.
+  nodes: GraphNode[];
+  // Edges with both endpoints in this scope — every edge in the corpus qualifies for
+  // exactly one scope, since no edge crosses a scope boundary (verified against the live
+  // corpus; enforced here defensively by filtering on membership, not asserted).
   edges: GraphEdge[];
-  // Every node's degree within the filtered graph (not just this panel's), so a caller can
-  // apply HUB_DEGREE_THRESHOLD without recomputing it.
-  degree: Map<string, number>;
 }
 
 export interface GlobalGraph {
-  // Ordered by (connected.length + isolated.length) desc, then scope name asc — biggest
-  // island first, deterministic tie-break, matching how the five real scopes were reported.
-  panels: ScopePanel[];
+  // Ordered by node count desc, then scope name asc — biggest island first, deterministic
+  // tie-break, matching how the five real scopes were reported.
+  scopes: ScopeGroup[];
+  // Every node's degree within the filtered graph, keyed by uid — shared across scopes
+  // since a uid belongs to exactly one scope, so one map serves every caller.
+  degree: Map<string, number>;
   totalNodes: number;
   totalEdges: number;
   isolatedCount: number;
@@ -51,6 +49,7 @@ export function buildGlobalGraph(graph: GraphResponse, allowedUids?: Set<string>
   const edges = graph.edges.filter((e) => nodeUids.has(e.from_uid) && nodeUids.has(e.to_uid));
 
   const degree = new Map<string, number>();
+  for (const node of nodes) degree.set(node.uid, 0);
   for (const edge of edges) {
     degree.set(edge.from_uid, (degree.get(edge.from_uid) ?? 0) + 1);
     degree.set(edge.to_uid, (degree.get(edge.to_uid) ?? 0) + 1);
@@ -63,27 +62,27 @@ export function buildGlobalGraph(graph: GraphResponse, allowedUids?: Set<string>
     else byScope.set(node.scope, [node]);
   }
 
-  const panels: ScopePanel[] = [...byScope.entries()].map(([scope, scopedNodes]) => {
+  const scopes: ScopeGroup[] = [...byScope.entries()].map(([scope, scopedNodes]) => {
     const scopedUids = new Set(scopedNodes.map((n) => n.uid));
     const scopedEdges = edges.filter((e) => scopedUids.has(e.from_uid) && scopedUids.has(e.to_uid));
-    const connected = scopedNodes.filter((n) => (degree.get(n.uid) ?? 0) > 0).sort(byUid);
-    const isolated = scopedNodes.filter((n) => (degree.get(n.uid) ?? 0) === 0).sort(byUid);
-    return { scope, connected, isolated, edges: scopedEdges, degree };
+    return { scope, nodes: [...scopedNodes].sort(byUid), edges: scopedEdges };
   });
 
-  panels.sort((a, b) => {
-    const aCount = a.connected.length + a.isolated.length;
-    const bCount = b.connected.length + b.isolated.length;
-    if (aCount !== bCount) return bCount - aCount;
+  scopes.sort((a, b) => {
+    if (a.nodes.length !== b.nodes.length) return b.nodes.length - a.nodes.length;
     return a.scope.localeCompare(b.scope);
   });
 
+  let isolatedCount = 0;
+  for (const d of degree.values()) if (d === 0) isolatedCount += 1;
+
   return {
-    panels,
+    scopes,
+    degree,
     totalNodes: nodes.length,
     totalEdges: edges.length,
-    isolatedCount: panels.reduce((sum, p) => sum + p.isolated.length, 0),
-    scopeCount: panels.length,
+    isolatedCount,
+    scopeCount: scopes.length,
   };
 }
 

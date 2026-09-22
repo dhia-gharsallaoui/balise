@@ -30,7 +30,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto("/");
     await page.getByRole("button", { name: "Graph", exact: true }).click();
-    await page.waitForSelector(".global-node");
+    await page.waitForSelector(".graph-a11y-node");
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
       .analyze();
@@ -102,22 +102,26 @@ for (const theme of ["light", "dark"] as const) {
 // batch). tokens.css's reduced-motion rule is real and global though —
 // `*, *::before, *::after { animation-duration: 0ms !important;
 // transition-duration: 0ms !important; }` — so this test exercises it
-// against a real animated element instead: the graph view's `.graph-node`,
-// whose `transition: opacity var(--duration) ease, border-color var(--duration)
-// ease` (graph.css) is non-zero under normal motion. See batch-G-report.md.
+// against a real animated element instead. Cytoscape draws the graph itself to a <canvas>,
+// which has no DOM CSS transitions to inspect, so this targets GraphA11yList's real DOM
+// button (`.graph-a11y-node`), whose `transition: outline-color var(--duration) ease`
+// (graph.css) is non-zero under normal motion. See graph-cytoscape-report.md.
 test("reduced motion disables the graph node transition", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   // The graph centres on the currently open page (spec §6.7 F-61) and shows an empty
-  // state with no page open, so a page must be centred before it renders any `.graph-node`s.
-  // Opening a page from List no longer works for this: List now shows the dedicated
-  // full-width `.kn-reader` page (reading-view-report.md), which replaces the toolbar the
-  // Graph button lives in — so this switches to Graph view first and centres the ego graph
-  // by clicking a connected global node instead, exactly like knowledge.spec.ts's criterion 8.
+  // state with no page open, so a page must be centred before it renders any ego
+  // `.graph-a11y-node`s. Opening a page from List no longer works for this: List now shows
+  // the dedicated full-width `.kn-reader` page (reading-view-report.md), which replaces the
+  // toolbar the Graph button lives in — so this switches to Graph view first and centres the
+  // ego graph by activating a connected global node instead, exactly like
+  // knowledge.spec.ts's criterion 8.
   await page.getByRole("button", { name: "Graph", exact: true }).click();
-  await page.locator('.global-node[data-isolated="false"]').first().click();
-  const node = page.locator(".graph-node").first();
-  await expect(node).toBeVisible();
+  const globalNode = page.locator('.graph-a11y-node[data-isolated="false"]').first();
+  await globalNode.focus();
+  await page.keyboard.press("Enter");
+  const node = page.locator(".graph-a11y-node").first();
+  await expect(node).toBeAttached();
   const normalDuration = await node.evaluate((el) => getComputedStyle(el).transitionDuration);
   expect(normalDuration).not.toBe("0s");
 
@@ -126,15 +130,15 @@ test("reduced motion disables the graph node transition", async ({ page }) => {
   expect(reducedDuration).toBe("0s");
 });
 
-// Same check for the global graph's own node styling (.global-node's opacity transition
-// in graph.css), which is separate CSS from the ego view's .graph-node and so is not
-// covered by the test above.
+// Same check for the global graph's own accessible-list node. `.graph-a11y-node` is shared
+// markup/CSS between ego and global modes (GraphA11yList.tsx / graph.css), but this exercises
+// it with no page open, distinct from the ego-mode path above.
 test("reduced motion disables the global graph node transition", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   await page.getByRole("button", { name: "Graph", exact: true }).click();
-  const node = page.locator(".global-node").first();
-  await expect(node).toBeVisible();
+  const node = page.locator(".graph-a11y-node").first();
+  await expect(node).toBeAttached();
   const normalDuration = await node.evaluate((el) => getComputedStyle(el).transitionDuration);
   expect(normalDuration).not.toBe("0s");
 

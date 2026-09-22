@@ -1,15 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchGraph } from "../../lib/api";
 import type { GraphResponse, PageRef } from "../../lib/types";
 import { EmptyState } from "../ui/EmptyState";
 import { buildEgoGraph, type EgoGraph } from "./ego";
-import { GlobalGraph } from "./GlobalGraph";
-import { buildGlobalGraph } from "./globalGraph";
+import { GraphCanvas } from "./GraphCanvas";
+import { buildEgoElements, buildGlobalElements } from "./graphElements";
+import { buildGlobalGraph, type GlobalGraph } from "./globalGraph";
 import { GraphControls } from "./GraphControls";
-import { GraphEdges } from "./GraphEdges";
 import { GraphLegend } from "./GraphLegend";
-import { GraphNodes } from "./GraphNodes";
-import { layoutGraph } from "./layout";
 import "../../styles/graph.css";
 
 // Ego-graph view (spec §6.7 F-61): centred on whatever page is open in the reader, not
@@ -18,17 +16,11 @@ import "../../styles/graph.css";
 // the bounded neighbourhood is computed client-side from the existing /api/graph payload
 // rather than a new server endpoint.
 //
-// The layout stays a pure function of (nodes, edges, seed) — same SEED, and ego.ts
-// returns nodes/edges in a deterministic order — so the same centre page always draws
-// the same picture.
-//
-// When no page is open, this renders the whole-vault "global graph" instead (GlobalGraph
-// —see globalGraph.ts for why five scopes read as five islands). Both modes hang off this
-// same component and the same fetched `graph`; `centre` is the only switch between them,
-// and the ego branch below is unchanged from before the global view existed.
-const WIDTH = 860;
-const HEIGHT = 560;
-const SEED = 42;
+// Both this ego branch and the whole-vault global branch (no page open) now render through
+// the same Cytoscape-backed GraphCanvas: graphElements.ts turns whichever domain graph is
+// active into Cytoscape elements, fcose lays them out, and GraphCanvas pairs the canvas
+// with an always-present accessible list (GraphA11yList) so neither mode depends on a
+// separate bespoke renderer the way the old force-simulated/radial-tree views did.
 
 export function GraphView({
   centre,
@@ -45,8 +37,8 @@ export function GraphView({
 }) {
   const [graph, setGraph] = useState<GraphResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [hovered, setHovered] = useState<string | null>(null);
   const [depth, setDepth] = useState<1 | 2>(1);
+  const [collapsedScopes, setCollapsedScopes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -63,18 +55,25 @@ export function GraphView({
     [graph, centre, depth],
   );
 
-  const positions = useMemo(
-    () =>
-      ego
-        ? layoutGraph(ego.nodes, ego.edges, { width: WIDTH, height: HEIGHT, seed: SEED })
-        : new Map(),
-    [ego],
-  );
-
-  const global = useMemo(
+  const global: GlobalGraph | null = useMemo(
     () => (graph && !centre ? buildGlobalGraph(graph, allowedUids ?? null) : null),
     [graph, centre, allowedUids],
   );
+
+  const egoElements = useMemo(() => (ego ? buildEgoElements(ego) : []), [ego]);
+  const globalElements = useMemo(
+    () => (global ? buildGlobalElements(global, collapsedScopes) : []),
+    [global, collapsedScopes],
+  );
+
+  const toggleScope = useCallback((scope: string) => {
+    setCollapsedScopes((prev) => {
+      const next = new Set(prev);
+      if (next.has(scope)) next.delete(scope);
+      else next.add(scope);
+      return next;
+    });
+  }, []);
 
   if (error) return <p className="kn-error" role="alert">{error}</p>;
 
@@ -89,7 +88,24 @@ export function GraphView({
         />
       );
     }
-    return <GlobalGraph graph={global} onOpen={onOpen} />;
+    return (
+      <div className="graph-frame">
+        <p className="global-summary">
+          {global.totalNodes} pages · {global.totalEdges} relations · {global.scopeCount}{" "}
+          {global.scopeCount === 1 ? "scope" : "scopes"}
+          {global.isolatedCount > 0 ? ` · ${global.isolatedCount} isolated` : ""}
+        </p>
+        <GraphCanvas
+          mode="global"
+          elements={globalElements}
+          nodeCount={global.totalNodes}
+          global={global}
+          collapsedScopes={collapsedScopes}
+          onOpen={onOpen}
+          onToggleScope={toggleScope}
+        />
+      </div>
+    );
   }
 
   if (!ego || ego.nodes.length <= 1) {
@@ -102,7 +118,6 @@ export function GraphView({
   }
 
   const roles = [...new Set(ego.edges.map((e) => e.kind))];
-  const neighbours = neighboursOf(ego, hovered);
 
   return (
     <div className="graph-frame">
@@ -113,32 +128,11 @@ export function GraphView({
         edgeCount={ego.edges.length}
         omittedCount={ego.omittedCount}
       />
-      <div className="graph-canvas">
-        <GraphEdges edges={ego.edges} positions={positions} width={WIDTH} height={HEIGHT} nodeCount={ego.nodes.length} hovered={hovered} />
-        <GraphNodes
-          nodes={ego.nodes}
-          positions={positions}
-          width={WIDTH}
-          height={HEIGHT}
-          hovered={hovered}
-          neighbours={neighbours}
-          onHover={setHovered}
-          onOpen={onOpen}
-        />
-      </div>
+      <GraphCanvas mode="ego" elements={egoElements} nodeCount={ego.nodes.length} ego={ego} onOpen={onOpen} />
     </div>
   );
 }
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error";
-}
-
-function neighboursOf(ego: EgoGraph, hovered: string | null): Set<string> {
-  if (!hovered) return new Set();
-  return new Set(
-    ego.edges
-      .filter((e) => e.from_uid === hovered || e.to_uid === hovered)
-      .flatMap((e) => [e.from_uid, e.to_uid]),
-  );
 }

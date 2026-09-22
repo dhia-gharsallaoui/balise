@@ -102,8 +102,11 @@ test("view and open page compose into one link", async ({ page }) => {
   // /api/graph fetch and the layout pass, so nodes exist a beat later than the click.
   await expect(page.locator(".graph-frame")).toBeVisible();
   // A node with relations, not merely the first in the DOM — an isolated node sits on the
-  // shelf and is a different shape of target.
-  await page.locator('.global-node[data-isolated="false"]').first().click();
+  // shelf and is a different shape of target. The canvas draws to <canvas>, so this drives
+  // GraphA11yList's real, focusable button equivalent instead of a pointer click.
+  const node = page.locator('.graph-a11y-node[data-isolated="false"]').first();
+  await node.focus();
+  await page.keyboard.press("Enter");
 
   // Poll rather than read straight after the click. Opening a page is a React state update
   // followed by a history write, so reading the URL synchronously races both — which is

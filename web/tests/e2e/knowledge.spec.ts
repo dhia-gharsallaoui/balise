@@ -52,16 +52,22 @@ test("criterion 8: graph renders and navigates", async ({ page }) => {
   // toggle lives in, so this reaches the ego graph by switching to Graph view and clicking a
   // global node to centre it instead.
   await page.getByRole("button", { name: "Graph", exact: true }).click();
-  await expect(page.locator(".global-graph")).toBeVisible();
+  await expect(page.getByRole("img", { name: /relation graph/i })).toBeVisible();
+  // The canvas draws to <canvas> — no DOM to click reliably. GraphA11yList's real, focusable
+  // buttons are the accessible equivalent (see GraphA11yList.tsx / a11y.spec.ts) and are what
+  // this suite drives instead of a pointer click on the canvas.
   // A node with at least one edge (`data-isolated="false"`) is guaranteed a >1-node ego graph.
-  await page.locator('.global-node[data-isolated="false"]').first().click();
+  const firstConnected = page.locator('.graph-a11y-node[data-isolated="false"]').first();
+  await firstConnected.focus();
+  await page.keyboard.press("Enter");
   await expect(page.getByRole("img", { name: /relation graph/i })).toBeVisible();
 
-  // Clicking another node in the ego graph navigates further, re-centring on it.
-  const otherNode = page.locator('.graph-node:not([data-depth="0"])').first();
-  const otherTitle = await otherNode.locator(".graph-node-label").innerText();
-  await otherNode.click();
-  await expect(page.locator('.graph-node[data-depth="0"] .graph-node-label')).toHaveText(otherTitle);
+  // Activating another node in the ego graph's accessible list navigates further, re-centring on it.
+  const otherNode = page.locator('.graph-a11y-node:not([data-depth="0"])').first();
+  const otherTitle = await otherNode.getAttribute("title");
+  await otherNode.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator('.graph-a11y-node[data-depth="0"]')).toHaveAttribute("title", otherTitle!);
 
   // Switching to List with a page centred in the graph is the one, consistent way to read it
   // (Knowledge.tsx's `view === "List" && open` rule) — ties graph navigation back to the full
@@ -72,10 +78,12 @@ test("criterion 8: graph renders and navigates", async ({ page }) => {
 
 test("graph shows the whole-vault global graph until a page is open", async ({ page }) => {
   await page.getByRole("button", { name: "Graph", exact: true }).click();
-  await expect(page.locator(".global-graph")).toBeVisible();
-  // At least one scope panel and one node button render without any page open.
-  await expect(page.locator(".global-panel").first()).toBeVisible();
-  await expect(page.locator(".global-node").first()).toBeVisible();
+  await expect(page.getByRole("img", { name: /relation graph/i })).toBeVisible();
+  // At least one scope group and one node button render without any page open — the canvas
+  // itself has no DOM structure to assert on, so this checks the accessible-list equivalent
+  // instead (see GraphA11yList.tsx).
+  await expect(page.locator(".graph-a11y-scope").first()).toBeAttached();
+  await expect(page.locator(".graph-a11y-node").first()).toBeAttached();
 });
 
 test("clicking a global graph node opens that page", async ({ page }) => {
@@ -84,19 +92,21 @@ test("clicking a global graph node opens that page", async ({ page }) => {
   // as the ego graph's new centre, replacing the whole-vault view with its bounded
   // neighbourhood (spec §6.7 F-61). A `data-depth="0"` node is the centre.
   await page.getByRole("button", { name: "Graph", exact: true }).click();
-  await page.locator('.global-node[data-isolated="false"]').first().click();
+  const node = page.locator('.graph-a11y-node[data-isolated="false"]').first();
+  await node.focus();
+  await page.keyboard.press("Enter");
   await expect(page.getByRole("img", { name: /relation graph/i })).toBeVisible();
-  await expect(page.locator('.graph-node[data-depth="0"]')).toBeVisible();
+  await expect(page.locator('.graph-a11y-node[data-depth="0"]')).toBeAttached();
 });
 
 test("a global graph node is keyboard-reachable and opens the page on Enter", async ({ page }) => {
   await page.getByRole("button", { name: "Graph", exact: true }).click();
-  const node = page.locator('.global-node[data-isolated="false"]').first();
+  const node = page.locator('.graph-a11y-node[data-isolated="false"]').first();
   await node.focus();
   await expect(node).toBeFocused();
-  await expect(node).toHaveClass(/global-node/);
+  await expect(node).toHaveClass(/graph-a11y-node/);
   await page.keyboard.press("Enter");
-  await expect(page.locator('.graph-node[data-depth="0"]')).toBeVisible();
+  await expect(page.locator('.graph-a11y-node[data-depth="0"]')).toBeAttached();
 });
 
 test("historical pages are hidden until the toggle is on", async ({ page }) => {

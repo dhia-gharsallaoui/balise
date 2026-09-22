@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { fetchPage, fetchPages, search } from "../../lib/api";
 import type {
   Claim, ClaimStatus, Group, HomePageRef, Hit, PageDetail as PageDetailData, PageRef, PageRow,
@@ -6,11 +6,17 @@ import type {
 } from "../../lib/types";
 import { current as currentUrl, onPopState, write as writeUrl } from "../../lib/urlState";
 import { EmptyState } from "../ui/EmptyState";
-import { GraphView } from "./GraphView";
 import { PageReader } from "./PageDetail";
 import { ResultList } from "./ResultList";
 import { SpaceTree } from "./SpaceTree";
 import "../../styles/knowledge.css";
+
+// Cytoscape + cytoscape-fcose (GraphView's dependencies) are heavy enough to more than double
+// the main bundle's gzipped size (see graph-cytoscape-report.md) — lazy-loaded so List-only
+// visits never fetch them, and Graph view pays its own, separate chunk cost on first use.
+const GraphView = lazy(() =>
+  import("./GraphView").then((m) => ({ default: m.GraphView })),
+);
 
 type ViewMode = "List" | "Graph";
 type Breakpoint = "narrow" | "medium" | "wide";
@@ -236,7 +242,9 @@ export function Knowledge({ tree, restrictTo, onClearRestrict }: KnowledgeProps)
         {error ? (
           <EmptyState title="Could not reach the server." hint={`${error}. Is balise serve running?`} />
         ) : view === "Graph" ? (
-          <GraphView centre={open} onOpen={setOpen} allowedUids={allowedUids} />
+          <Suspense fallback={<div className="graph-frame" aria-busy="true" />}>
+            <GraphView centre={open} onOpen={setOpen} allowedUids={allowedUids} />
+          </Suspense>
         ) : (
           <ResultList groups={visibleGroups} query={query} coverage={coverage} onOpen={setOpen} />
         )}
