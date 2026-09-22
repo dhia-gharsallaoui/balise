@@ -202,7 +202,13 @@ async function gif(browser, session, { name, go }) {
     events: rec.events,
     outputPath: path.join(dir, "composed.mp4"),
     viewport: GIF_VIEW,
-    zoom: true,
+    // Zoom off, on purpose. screencli's auto-zoom crops to 40% of the viewport (a 2.5x
+    // push) over a one-second approach before every action, and its timings are module
+    // constants rather than options. On a dense two-pane UI that reads as the camera
+    // lurching in and cutting off the panel you were just reading -- it hides context
+    // instead of directing attention. The cursor and the click highlight already say where
+    // the action is, without taking the rest of the screen away.
+    zoom: false,
     highlight: true,
     cursor: true,
     preset: "fast",
@@ -252,7 +258,7 @@ async function main() {
       await p.goto(`${BASE}/knowledge`); await ready(p); await pause(p, 600);
     }});
     await shot(browser, session, { name: `graph${s}`, theme, go: async (p) => {
-      await p.goto(`${BASE}/knowledge?view=Graph`); await p.locator(".global-node").first().waitFor(); await pause(p, 1800);
+      await p.goto(`${BASE}/knowledge?view=Graph`); await p.locator(".cy-container canvas").first().waitFor(); await pause(p, 1800);
     }});
     await shot(browser, session, { name: `review${s}`, theme, go: async (p) => {
       await p.goto(`${BASE}/review`); await pause(p, 1400);
@@ -282,7 +288,7 @@ async function main() {
     // "failover" in the box narrows it to two pages and there is nothing to look at.
     await p.getByPlaceholder("Search claims…").fill(""); await pause(p, 900);
     await rec.click(p.locator(".kn-viewmode button", { hasText: "Graph" }), "Switch to the relation graph");
-    await p.locator(".global-node").first().waitFor({ timeout: 20_000 }); await pause(p, 2800);
+    await p.locator(".cy-container canvas").first().waitFor({ timeout: 20_000 }); await pause(p, 2800);
   }});
 
   // The thesis: an agent proposed something, a human decides. Nothing is applied until
