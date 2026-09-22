@@ -47,30 +47,6 @@ Accepting commits to git as `agent:compile`. Editing before you accept records t
 changed, so **proposal → your edit → commit** stays traceable. Nothing an LLM produces reaches a
 page without someone saying yes.
 
-## Five ideas worth knowing
-
-**Claims, not documents.** A page carries 1–6 claims: short statements, not subjects. "Samples
-older than 20 minutes are rejected" is a claim; "retention policy" is a heading. Search and
-context assembly work over claims, so an agent retrieves the assertion it needs rather than a
-chunk that mentions the topic.
-
-**Scope is enforced by construction.** `store.Queries` binds its scope list when it is built and
-every query filters on it — a scopeless query does not compile. AST guard tests enforce that as
-an *allowlist*, not a blocklist; they were inverted after reviewers built working bypasses
-against the blocklist form. A token scoped to `work` asking for a `client-acme` page gets
-`not found`, identical to a slug that never existed, so absence and denial are indistinguishable.
-
-**Two credential systems, deliberately not merged.** A session cookie authenticates one owner at
-`/api`. Agent tokens — with their own scopes, capabilities, revocation and audit trail —
-authenticate `/mcp`. A cookie cannot drive a tool call; a token cannot read the UI API.
-
-**Findings resolve themselves.** Lint findings ("this headline is too long", "this link points
-nowhere") clear when the cause is fixed and the page is reindexed. A to-do list that only grows
-is noise.
-
-**Everything derived is rebuildable.** The vault is the source of truth. The index, the graph,
-the search tables — all of it regenerates from markdown and git.
-
 ---
 
 ## Quickstart
@@ -175,6 +151,30 @@ in shell history.
 Every call writes one audit row — **including refusals**. The Agents screen shows which spaces
 each agent may read, what it actually did, and distinguishes a refused read from a successful one.
 
+### Teaching the agent to use it
+
+Connecting the server is half of it. An agent with these tools available will read when you
+ask it to and otherwise ignore them — so the vault only ever grows when *you* feed it.
+
+[`skill/SKILL.md`](skill/SKILL.md) closes that loop. It gives the agent two habits: call
+`context` before answering anything about these systems, and offer to `remember` whatever it
+establishes that is durable and not already recorded. It also tells it what is *not* worth
+writing — anything already there, anything true for ten minutes, anything it inferred but did
+not verify — and that a client's detail belongs in that client's scope and nowhere else.
+
+```bash
+mkdir -p ~/.claude/skills/balise
+ln -s "$PWD/skill/SKILL.md" ~/.claude/skills/balise/SKILL.md
+```
+
+It is one plain markdown file with YAML frontmatter, which is the format Claude Code, Codex
+and OpenCode all read — nothing in it is specific to one host. See
+[`skill/README.md`](skill/README.md) for per-host paths and what is worth tuning.
+
+**Mint the token with `remember`, not just `read`.** An agent following this skill with a
+read-only token will be refused every time it tries to record something, which looks like
+the skill misbehaving and is really the token being too narrow.
+
 ## Architecture
 
 ```mermaid
@@ -237,21 +237,6 @@ balise compile extract-claims <vault>     propose claims for pages missing them
 ```
 
 `--dsn` (or `BALISE_DSN`) applies to all of them.
-
-## What it does not do yet
-
-Named here rather than discovered later.
-
-- **No export, no redaction.** The Settings controls are visibly disabled. Choosing an audience
-  and previewing what redaction strips is designed but not built, and a preview that did not
-  really redact would be worse than none on a vault holding several tenants.
-- **No connectors.** Nothing syncs from an external system on a schedule. Pages arrive by import,
-  by `remember`, or by pasting into Sources.
-- **Retrieval is lexical.** No embedding model, no vector index. `search` and `context` rank with
-  Postgres full-text and trigram matching, and `context` reports `coverage: low` when it knows it
-  did badly rather than implying a confidence it cannot support.
-- **Single owner.** One password, no accounts, roles or sharing.
-- **Rate limiting is per process.** It does not coordinate across instances.
 
 ## Testing
 
