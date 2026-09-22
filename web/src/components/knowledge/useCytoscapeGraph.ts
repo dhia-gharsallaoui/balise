@@ -3,7 +3,6 @@ import type { PageRef } from "../../lib/types";
 import fcose from "cytoscape-fcose";
 import layoutUtilities from "cytoscape-layout-utilities";
 import { useEffect, useRef, useState } from "react";
-import { MIN_NODE_SIZE } from "./graphElements";
 import { buildGraphStylesheet, HUB_ZOOM_THRESHOLD, readGraphPalette, watchThemeChange } from "./graphStyle";
 
 // Owns the one thing graphElements.ts and graphStyle.ts deliberately know nothing about:
@@ -97,59 +96,48 @@ function buildLayoutOptions(): FcoseLayoutOptions {
     // that label is actually painted. Measured live: with this on, the packed graph's
     // bounding box was 3-4x larger than the container needed for legible-zoom fit (a title
     // like "Recreating an AKS node pool drops custom taints" reserves ~250 model-space px of
-    // width for one 34px circle). False trades a little more label crowding once you zoom in
-    // close (where there's room to pan around it) for a graph that actually fits and reads at
-    // rest, which is what was asked for.
+    // width for one 34px circle). False keeps the *layout* (node positions) compact; the
+    // final fit-to-view (see cy.fit() in the mount effect below) separately and always
+    // accounts for every label's true footprint regardless of this flag, so nothing painted
+    // ever ends up outside the viewport — this flag only controls how tightly nodes are
+    // allowed to sit next to each other, not what's guaranteed visible.
     nodeDimensionsIncludeLabels: false,
     tile: true,
     // Isolated (degree-0) nodes are tiled into one tidy block rather than scattered as
     // separate one-node components — tightened from fcose's own default (10/10) so that
     // block doesn't itself read as a second empty-looking region.
-    tilingPaddingVertical: 6,
-    tilingPaddingHorizontal: 6,
+    tilingPaddingVertical: 4,
+    tilingPaddingHorizontal: 4,
     packComponents: true,
     nestingFactor: 0.1,
-    // Below fcose's own defaults (gravity 0.25, gravityCompound 1.0) on purpose: the previous
-    // values (0.3 / 1.2) plus an above-default nodeRepulsion/idealEdgeLength were spreading
-    // each scope's members out more than necessary. Pulling harder (gravity, gravityCompound)
-    // while pushing less (nodeRepulsion, idealEdgeLength) shrinks each scope's own settled
-    // size; packComponents (now functional — see ensureLayoutExtensionsRegistered above) is
-    // what keeps the 4 scopes themselves, and the isolated-node tile, close together.
-    gravity: 0.45,
-    gravityCompound: 1.6,
-    nodeSeparation: 45,
-    idealEdgeLength: 42,
-    edgeElasticity: 0.45,
+    // Pulled tighter again after the fix round that followed this one: a zoom-floor used to
+    // sit downstream of this layout and paper over an under-compressed result by zooming in
+    // past whatever fit-to-content produced — which is exactly what let up to 40% of the
+    // graph end up outside the viewport at 1024 wide. That mechanism is gone (see the mount
+    // effect below); legibility now has to come entirely from how small a footprint fcose
+    // settles on, so gravity/gravityCompound go up again and nodeSeparation/idealEdgeLength/
+    // nodeRepulsion come down, on top of the round-1 values, to shrink both each scope's own
+    // settled size and the total canvas fit-to-content has to zoom out to cover.
+    gravity: 0.85,
+    gravityCompound: 2.4,
+    nodeSeparation: 26,
+    idealEdgeLength: 30,
+    // Above fcose's default (0.45) so the shorter idealEdgeLength above actually holds against
+    // nodeRepulsion pushing connected nodes back apart — a soft ideal length with weak elastic
+    // pull just lets repulsion win and the graph re-spreads back out.
+    edgeElasticity: 0.6,
     // A function, not a flat number: turning off nodeDimensionsIncludeLabels (above) stopped
-    // fcose reserving room for *every* node's label, which is what let the graph pack tightly
+    // fcose reserving room for *every* node's label, which is what lets the graph pack tightly
     // — but it also stopped reserving room for the handful of labels that are always visible
-    // (hubs and the ego centre, per graphStyle.ts's cascade), and those were measured
-    // overlapping each other at rest once the graph tightened up. Giving only
-    // `data("labelAlways")` nodes extra repulsion pushes the always-labelled few further
-    // apart from their neighbours without re-inflating spacing around the majority of nodes,
-    // whose labels stay hidden until zoomed in anyway.
-    nodeRepulsion: (node: NodeSingular) => (node.data("labelAlways") ? 14000 : 2600),
+    // (hubs and the ego centre, per graphStyle.ts's cascade). Giving only
+    // `data("labelAlways")` nodes a bit of extra repulsion biases the initial placement toward
+    // not crowding those labels together, reducing how often the deterministic label-collision
+    // pass below (suppressOverlappingLabels) has to hide one to avoid an actual on-screen
+    // overlap — it's a bias, not a guarantee, which is why that pass exists at all.
+    nodeRepulsion: (node: NodeSingular) => (node.data("labelAlways") ? 6000 : 1800),
     randomize: true,
   };
 }
-
-// However tightly fcose packs things, fit-to-content can still land on a low zoom for a
-// large or spread-out graph — and a low zoom shrinks node/label pixel size right along with
-// it, since both are defined in Cytoscape's model-space units. This is the backstop the
-// layout/packing tuning above can't fully guarantee on its own: after any auto-fit (initial
-// layout, or the "fit to view" button), if the resulting zoom would render even the smallest
-// node under MIN_NODE_SCREEN_PX on screen, zoom back in toward that floor instead of leaving
-// it that small. Trades "everything visible at once" for "what's visible is legible" —
-// panning covers the rest, same as before.
-const MIN_NODE_SCREEN_PX = 26;
-
-// Bound on how much clampZoomFloor is allowed to zoom in past the natural fit: raising zoom
-// with no regard for how large the content actually is can leave most of the graph outside
-// the viewport entirely (proven live during the fix round — forcing zoom up on an untamed
-// layout took a "half-filled canvas" complaint to "almost nothing visible"). Never zoom in
-// far enough that less than this fraction of the content's bounding box, on either axis,
-// would remain in view — legible-but-mostly-off-screen is worse than the size floor missed.
-const MIN_VISIBLE_FRACTION = 0.6;
 
 // cytoscape-layout-utilities defaults to packing components toward a square (1:1) arrangement,
 // which fights a landscape container: a wide, short canvas is left with unused width if the
@@ -171,25 +159,187 @@ function configureComponentPacking(cy: Core): void {
     // utilityFunction 1 on the same graph), which is a worse trade for "fill the canvas"
     // than the small aspect-ratio mismatch left over from the default fullness-first
     // utility. Left at the default (1) deliberately.
-    componentSpacing: 24,
+    // Tightened from 24: componentSpacing is the gap layoutUtilities leaves *between* the
+    // scope compounds (and the isolated-node tile) it packs — 24 of that was pure unused
+    // margin between clusters that otherwise-tightened spacing (buildLayoutOptions) had no
+    // way to touch.
+    componentSpacing: 12,
   });
 }
 
-function clampZoomFloor(cy: Core): void {
-  const floorZoom = MIN_NODE_SCREEN_PX / MIN_NODE_SIZE;
-  const currentZoom = cy.zoom();
-  if (currentZoom >= floorZoom) return;
+// includeNodes: false is load-bearing, not cosmetic. For a leaf node this trims the box down
+// from "node circle + label" to just the label, which is all two *labels* colliding actually
+// means. For a compound (.graph-scope) it matters far more: a compound's own bounding box IS
+// the extent of all its descendants, so `includeLabels: true` alone (the default this used to
+// call) returned the *entire scope cluster's footprint* as the scope's "label" box. Every hub
+// label living inside that scope — which by definition sits inside its parent's full extent —
+// then registered as overlapping that giant box and got suppressed, every time, for every
+// scope: measured live, this was silently zeroing out all 33 nodes' labelAlways flags with
+// none left visible at rest. `includeNodes: false` makes boundingBox() return just the
+// rendered label rectangle in both cases (confirmed live: a scope title's box shrinks from
+// the whole cluster down to ~39x19 model-space px at its actual text position).
+function labelBox(ele: NodeSingular): { x1: number; y1: number; x2: number; y2: number } {
+  return ele.boundingBox({ includeNodes: false, includeLabels: true, includeOverlays: false });
+}
 
-  const bb = cy.elements().boundingBox();
-  const safeZoomCap =
-    bb.w > 0 && bb.h > 0
-      ? Math.min(cy.width() / (bb.w * MIN_VISIBLE_FRACTION), cy.height() / (bb.h * MIN_VISIBLE_FRACTION))
-      : floorZoom;
-  const targetZoom = Math.max(currentZoom, Math.min(floorZoom, safeZoomCap));
-  if (targetZoom <= currentZoom) return;
+// The circle/shape a leaf node paints, deliberately excluding its label — used to keep a
+// *different* node's label from ever printing on top of this node's body. A label rendered
+// half-behind a neighbour's circle is just as broken as two labels overlapping each other
+// (measured live: "Require dual ExpressRoute circuits..." with the middle third erased by a
+// node drawn on top of it), so plain node bodies need to occupy the same "reserved" space as
+// labels and scope titles do.
+function nodeBodyBox(ele: NodeSingular): { x1: number; y1: number; x2: number; y2: number } {
+  return ele.boundingBox({ includeNodes: true, includeLabels: false, includeOverlays: false });
+}
 
-  cy.zoom({ level: targetZoom, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
-  cy.center(cy.elements());
+function boxesOverlap(
+  a: { x1: number; y1: number; x2: number; y2: number },
+  b: { x1: number; y1: number; x2: number; y2: number },
+): boolean {
+  return a.x1 < b.x2 && b.x1 < a.x2 && a.y1 < b.y2 && b.y1 < a.y2;
+}
+
+// graphStyle.ts's label-density cascade keeps a node's label permanently on-screen whenever
+// its `labelAlways` data flag is set (hubs, plus the ego centre and its immediate
+// neighbours) — but that flag is assigned per-node, from degree/depth alone, by
+// graphElements.ts, with no idea where fcose actually placed anything. Two qualifying nodes
+// can still land close enough together that their labels print on top of each other, or a
+// label can land on top of some unrelated node's circle — both were observed live even after
+// the spacing tuning in buildLayoutOptions. Rather than trust a stochastic layout to always
+// keep every permanently-visible label clear — "usually fine" isn't "never overlapping" —
+// this walks every such label once positions settle and turns `labelAlways` back off for
+// whichever member of an overlapping pair matters less, in priority order (the ego centre and
+// depth<=1 neighbours first, then by degree). A suppressed label still appears on hover or
+// once zoomed past HUB_ZOOM_THRESHOLD: graphStyle.ts's cascade reads the *current* value of
+// the data flag, so flipping it at runtime here is enough. Scope titles and every node's own
+// circle are never suppressed — reserved first, unconditionally — since an unlabelled cluster
+// or a label-less node is a smaller loss than text nobody can read.
+//
+// Every reserved box is tagged with the id of the element it belongs to. That id is what
+// keeps a node's *own* body from disqualifying its *own* label: a label sits immediately
+// below its node (text-margin-y: 4) by design, so its box always touches or overlaps that
+// same node's body box — that adjacency is normal layout, not a collision, and checking a
+// hub's label against the full untagged reserved set (measured live) suppressed every single
+// hub's label, unconditionally, before any cross-node check ever mattered. Only a *different*
+// id's body/label counts as something to avoid.
+interface ReservedBox {
+  id: string;
+  box: { x1: number; y1: number; x2: number; y2: number };
+}
+
+// cy.fit()'s bounding box defaults to includeLabels: true across every element it's given —
+// and graphElements.ts gives *every* node a `label`, not just the handful graphStyle.ts's
+// density cascade actually paints text for (scope titles, plus whichever nodes carry
+// labelAlways). Measured live at 1024x768 on the real corpus: the label-inclusive box across
+// all 33 nodes was 1667x965 model-space px versus 879x900 with labels excluded — cy.fit() was
+// zooming out to reserve room for 32 labels nobody can see, which is what produced a
+// technically-uncropped but needlessly small, mostly-empty-margin result (only ~1 hub label
+// surviving suppressOverlappingLabels, the rest of the canvas blank). computeFitBox unions
+// plain node/edge/compound geometry (every element, no labels) with the label geometry of only
+// the elements the cascade actually renders unconditionally (scope titles, plus whatever
+// labelAlways nodes survive suppressOverlappingLabels) — so the fit reserves exactly the space
+// that will be painted, no more.
+function unionBox(
+  a: { x1: number; y1: number; x2: number; y2: number },
+  b: { x1: number; y1: number; x2: number; y2: number },
+): { x1: number; y1: number; x2: number; y2: number } {
+  return {
+    x1: Math.min(a.x1, b.x1),
+    y1: Math.min(a.y1, b.y1),
+    x2: Math.max(a.x2, b.x2),
+    y2: Math.max(a.y2, b.y2),
+  };
+}
+
+function computeFitBox(cy: Core): { x1: number; y1: number; x2: number; y2: number } {
+  const bodies = cy
+    .elements()
+    .boundingBox({ includeLabels: false, includeNodes: true, includeOverlays: false });
+  const visibleLabels = cy.elements(".graph-scope, .graph-node[?labelAlways]");
+  if (visibleLabels.length === 0) return bodies;
+  const labels = visibleLabels.boundingBox({
+    includeLabels: true,
+    includeNodes: false,
+    includeOverlays: false,
+  });
+  return unionBox(bodies, labels);
+}
+
+// Replicates cy.fit()'s own zoom/pan arithmetic (zoom = min of width/height ratios against the
+// padded container; pan centres the box) but against computeFitBox's box instead of cy.fit()'s
+// default, label-inflated one — see computeFitBox's comment for why that substitution matters.
+function fitToBox(cy: Core, padding: number): void {
+  const box = computeFitBox(cy);
+  const w = cy.width();
+  const h = cy.height();
+  const boxWidth = box.x2 - box.x1;
+  const boxHeight = box.y2 - box.y1;
+  if (!(boxWidth > 0) || !(boxHeight > 0) || !(w > 0) || !(h > 0)) {
+    // Degenerate box (e.g. a single point, or a zero-size container mid-mount) — fall back to
+    // Cytoscape's own fit rather than divide by zero.
+    cy.fit(cy.elements(), padding);
+    return;
+  }
+  const zoom = Math.min((w - 2 * padding) / boxWidth, (h - 2 * padding) / boxHeight);
+  cy.zoom(zoom);
+  cy.pan({
+    x: (w - zoom * (box.x1 + box.x2)) / 2,
+    y: (h - zoom * (box.y1 + box.y2)) / 2,
+  });
+}
+
+// graphStyle.ts's label font-size is a function of `cy.zoom()` (a hand-built floor, since
+// Cytoscape's min-zoomed-font-size hides rather than floors — see the comment on
+// zoomCompensatedFontSize) so that on-screen label size stays legible regardless of how far
+// fit-to-content had to zoom out. That creates a small circularity: fitToBox's bounding box
+// includes label geometry, but that geometry's *model-space* extent depends on the current
+// zoom, which fitToBox is about to change. One pass can therefore land a hair short of
+// self-consistent — this repeats fit -> style().update() a few times so the bounding box used
+// by the final fit reflects label sizes measured at that same fit's own zoom, which is the
+// coordinator's own "fit again after the layout settles" guidance applied to a zoom-dependent
+// style rather than only to fcose's stochastic node positions. Cheap at this graph's scale
+// (tens of nodes), and each pass is a plain synchronous call. A final fitToBox runs after
+// suppressOverlappingLabels, since suppression can only turn labelAlways *off* — never on —
+// so the fit box computed post-suppression is the same size or smaller, never bigger, meaning
+// this last pass can only tighten the view further, never re-introduce cropping.
+const FIT_SETTLE_PASSES = 2;
+
+function settleFit(cy: Core): void {
+  for (let pass = 0; pass < FIT_SETTLE_PASSES; pass += 1) {
+    fitToBox(cy, FIT_PADDING);
+    cy.style().update();
+  }
+  suppressOverlappingLabels(cy);
+  fitToBox(cy, FIT_PADDING);
+}
+
+function suppressOverlappingLabels(cy: Core): void {
+  const reserved: ReservedBox[] = [
+    ...cy.nodes(".graph-scope").map((scope) => ({ id: scope.id(), box: labelBox(scope) })),
+    ...cy.nodes(".graph-node").map((node) => ({ id: node.id(), box: nodeBodyBox(node) })),
+  ];
+
+  const priority = (node: NodeSingular): number => {
+    if (node.data("isCentre")) return Number.POSITIVE_INFINITY;
+    const depth = node.data("depth");
+    const depthBonus = typeof depth === "number" && depth <= 1 ? 1_000_000 : 0;
+    return depthBonus + (Number(node.data("degree")) || 0);
+  };
+
+  const hubs = cy
+    .nodes(".graph-node[?labelAlways]")
+    .sort((a, b) => priority(b) - priority(a) || (a.id() < b.id() ? -1 : 1));
+
+  hubs.forEach((node) => {
+    const id = node.id();
+    const box = labelBox(node);
+    const collides = reserved.some((other) => other.id !== id && boxesOverlap(box, other.box));
+    if (collides) {
+      node.data("labelAlways", false);
+      return;
+    }
+    reserved.push({ id, box });
+  });
 }
 
 export function useCytoscapeGraph(options: UseCytoscapeGraphOptions): UseCytoscapeGraphHandle {
@@ -260,13 +410,27 @@ export function useCytoscapeGraph(options: UseCytoscapeGraphOptions): UseCytosca
     const syncZoomClass = () => {
       if (!cy) return;
       cy.nodes(".graph-node").toggleClass("zoomed-in", cy.zoom() >= HUB_ZOOM_THRESHOLD);
+      // Label font-size is zoom-dependent (graphStyle.ts's zoomCompensatedFontSize) so that
+      // its on-screen size stays constant instead of shrinking — or vanishing outright, per
+      // min-zoomed-font-size's real hide-below-threshold behaviour — as zoom drops. Cytoscape
+      // does not re-invoke function-valued styles on every zoom/pan tick on its own, so this
+      // forces the recompute on every wheel-zoom, pinch, drag-pan, or button click.
+      cy.style().update();
     };
     cy.on("zoom pan", syncZoomClass);
     syncZoomClass();
     // fcose's own `fit: true` runs once the layout (and, unless reduced-motion, its 400ms
-    // settle animation) finishes — `layoutstop` fires after that, so this is the first safe
-    // point to check whether the fit it chose left nodes too small and correct it.
-    cy.on("layoutstop", () => clampZoomFloor(cy));
+    // settle animation) finishes, but compound (scope) box geometry can still be settling
+    // relative to when fcose computed that internal fit — so `layoutstop` re-fits explicitly,
+    // synchronously, with no animation, as the actual guarantee that nothing is cropped. This
+    // calls settleFit (repeated fitToBox + style().update() to converge with the zoom-dependent
+    // label font-size, see settleFit's comment) rather than a plain cy.fit(): fitToBox's box
+    // always includes every element's plain node/edge geometry (nothing paintable can ever end
+    // up outside it) unioned with the label geometry of whatever is actually going to be shown
+    // text for, so nothing painted ever ends up outside the viewport without reserving space for
+    // labels nobody will see. Label collisions are a separate concern from cropping, handled by
+    // suppressOverlappingLabels inside settleFit.
+    cy.on("layoutstop", () => settleFit(cy as Core));
 
     let resizeObserver: ResizeObserver | undefined;
     if (typeof ResizeObserver !== "undefined") {
@@ -310,10 +474,34 @@ export function useCytoscapeGraph(options: UseCytoscapeGraphOptions): UseCytosca
     fitToContent: () => {
       const cy = cyRef.current;
       if (!cy) return;
+      // Deliberately not cy.animate({ fit: {...} }): that shorthand computes its target zoom
+      ///pan from cy.fit()'s own default (label-inclusive-for-every-element) bounding box, which
+      // would animate toward the same over-zoomed-out point computeFitBox exists to avoid (see
+      // its comment) before `complete` snapped back to the tighter, correct result — a visible
+      // zoom-out-then-jump-back. Animating directly to the zoom/pan computeFitBox already
+      // prescribes avoids that. Node positions don't change here, only zoom/pan — but label
+      // font-size tracks zoom (graphStyle.ts's zoomCompensatedFontSize), so this target can end
+      // up a hair off from what that same zoom would produce once labels resize to match it.
+      // `complete` runs settleFit once the animation lands, repeating fitToBox + style().update()
+      // (and re-running suppressOverlappingLabels) to converge on a self-consistent,
+      // guaranteed-uncropped result exactly as layoutstop does after a re-layout.
+      const box = computeFitBox(cy);
+      const w = cy.width();
+      const h = cy.height();
+      const boxWidth = box.x2 - box.x1;
+      const boxHeight = box.y2 - box.y1;
+      const canComputeTarget = boxWidth > 0 && boxHeight > 0 && w > 0 && h > 0;
+      const zoom = canComputeTarget
+        ? Math.min((w - 2 * FIT_PADDING) / boxWidth, (h - 2 * FIT_PADDING) / boxHeight)
+        : cy.zoom();
+      const pan = canComputeTarget
+        ? { x: (w - zoom * (box.x1 + box.x2)) / 2, y: (h - zoom * (box.y1 + box.y2)) / 2 }
+        : cy.pan();
       cy.animate({
-        fit: { eles: cy.elements(), padding: FIT_PADDING },
+        zoom,
+        pan,
         duration: prefersReducedMotion() ? 0 : 200,
-        complete: () => clampZoomFloor(cy),
+        complete: () => settleFit(cy),
       });
     },
   };

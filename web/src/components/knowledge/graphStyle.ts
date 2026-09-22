@@ -159,6 +159,38 @@ export function watchThemeChange(onChange: () => void): () => void {
 
 const HUB_ZOOM_THRESHOLD = 1.1;
 
+// Cytoscape.js's `min-zoomed-font-size` does not do what an earlier version of this file
+// assumed. Per Cytoscape's own docs it is a hide-below-threshold gate ("if zooming makes the
+// effective font size of the label smaller than this, then no label is shown") — not a floor
+// that keeps a label's on-screen size from shrinking. Confirmed live: at 1024x768,
+// fit-to-content settles around zoom~0.43 and *every* label in the graph — scope titles and
+// hub labels alike — silently rendered nothing, despite text-opacity computing to 1 for all
+// of them, purely because that property was hiding them. A real floor has to be built by
+// hand: font-size below is a function of the *current* zoom, so the rendered (on-screen) size
+// stays pinned at the target size no matter how far fit-to-content had to zoom out.
+// useCytoscapeGraph.ts's zoom/pan handler and its post-fit settle pass both call
+// `cy.style().update()` to force this function to re-run, since Cytoscape does not
+// re-evaluate function-valued styles on its own as zoom/pan changes — only on data/class
+// changes or an explicit `update()`.
+const MIN_ZOOM_FOR_FONT_SCALING = 0.05;
+
+// Uncapped, this creates a runaway loop with useCytoscapeGraph.ts's settleFit: cy.fit()'s
+// bounding box includes label geometry, so a bigger (zoom-compensated) model-space font
+// makes the box bigger, which makes the next fit() zoom out further, which (being a smaller
+// zoom) makes the compensated font bigger still — measured live, three settle passes alone
+// dragged a real fit from zoom~0.43 down to zoom~0.16 with every hub label then colliding
+// and getting suppressed. Capping how large the model-space font is allowed to grow breaks
+// the loop: once zoom drops far enough that target/zoom would exceed the cap, the font stops
+// responding to further zoom changes, so the next fit() sees an unchanging box and settles
+// immediately instead of spiralling. The cap (~2.5x the target) sits well below any zoom this
+// graph's corpus actually produces (measured 0.43-0.61 across the required viewports), so in
+// practice full compensation is what's visible; it only engages as a circuit-breaker if a
+// future re-layout or a much bigger corpus pushes fit-to-content zoom lower than that.
+function zoomCompensatedFontSize(targetPx: number): (el: NodeSingular) => number {
+  const maxPx = targetPx * 2.5;
+  return (el) => Math.min(maxPx, targetPx / Math.max(el.cy().zoom(), MIN_ZOOM_FOR_FONT_SCALING));
+}
+
 /**
  * Cytoscape's own stylesheet cascade (later matching rules win) does the label-density
  * work no runtime code needs to touch per-frame: a base rule hides every label, `.zoomed-in`
@@ -183,15 +215,19 @@ export function buildGraphStylesheet(palette: GraphPalette): StylesheetJsonBlock
         "text-valign": "top",
         "text-halign": "center",
         "font-family": palette.fontUi,
-        "font-size": 15,
-        // Scope labels are always on (no text-opacity toggle below) — min-zoomed-font-size
+        // Scope labels are always on (no text-opacity toggle below) — zoomCompensatedFontSize
         // keeps them at a legible on-screen size even when the fit-to-content zoom is well
-        // under 1, instead of shrinking in lockstep with the rest of the canvas.
-        "min-zoomed-font-size": 15,
+        // under 1, instead of shrinking in lockstep (or vanishing outright — see the comment
+        // above HUB_ZOOM_THRESHOLD) with the rest of the canvas.
+        "font-size": zoomCompensatedFontSize(15),
         "font-weight": 600,
         color: palette.ink2,
         "text-margin-y": -6,
-        padding: "28px",
+        // Trimmed from 28px: this is pure margin between a scope's outer box and its
+        // children's own footprint, on all four sides — at 8 nodes it was a visibly larger
+        // empty border than the cluster needed, and it's one of the few knobs here that
+        // shrinks a compound's box without touching node/label size or layout spacing.
+        padding: "18px",
         // Cytoscape's compound auto-sizing defaults to "include" here — the scope box is
         // sized to fit every descendant's label bounding box regardless of that label's
         // text-opacity. Since almost all node labels are invisible at rest (graphStyle's own
@@ -216,12 +252,12 @@ export function buildGraphStylesheet(palette: GraphPalette): StylesheetJsonBlock
         "border-color": palette.surface,
         label: "data(label)",
         "font-family": palette.fontUi,
-        "font-size": 14,
         // Whichever labels the density cascade below turns on (hubs/centre at rest, every
         // label once zoomed past HUB_ZOOM_THRESHOLD) must still be readable at whatever zoom
-        // fit-to-content settled on — this floors their on-screen size at 14px regardless of
-        // how zoomed out the view is, so "fewer labels, but legible" actually holds at rest.
-        "min-zoomed-font-size": 14,
+        // fit-to-content settled on — zoomCompensatedFontSize pins their on-screen size at
+        // 14px regardless of how zoomed out the view is, so "fewer labels, but legible"
+        // actually holds at rest instead of the labels being hidden outright.
+        "font-size": zoomCompensatedFontSize(14),
         color: palette.ink,
         "text-valign": "bottom",
         "text-halign": "center",
