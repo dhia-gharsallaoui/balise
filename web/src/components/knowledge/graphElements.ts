@@ -8,9 +8,16 @@ import type { GlobalGraph } from "./globalGraph";
 // nothing about Cytoscape, and graphStyle.ts only maps `data()` fields to paint — this
 // module is the seam between "our domain model" and "the library's node/edge shape".
 
-export const MIN_NODE_SIZE = 22;
-export const MAX_NODE_SIZE = 64;
-const SIZE_FACTOR = 8;
+// Floor bumped from 22 to 34 (and the ceiling/factor scaled to match) after visual review at
+// 1440x900 found even the biggest hubs reading as "dots" — 22px in Cytoscape's model space,
+// scaled down again by whatever zoom fcose's fit-to-content lands on, produced sub-10px
+// on-screen circles. A leaf node (degree 0) at 34px model units is still legible once
+// useCytoscapeGraph.ts's post-layout zoom floor guarantees a minimum on-screen size on top
+// of this — the two mechanisms (bigger model size + a zoom that can't collapse it further)
+// work together rather than either alone.
+export const MIN_NODE_SIZE = 34;
+export const MAX_NODE_SIZE = 84;
+export const SIZE_FACTOR = 10;
 
 /**
  * width = min(MAX, MIN + sqrt(degree) * FACTOR) — degree 0 gives the floor size, and the

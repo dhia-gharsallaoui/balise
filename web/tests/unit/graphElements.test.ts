@@ -6,6 +6,7 @@ import {
   MAX_NODE_SIZE,
   MIN_NODE_SIZE,
   nodeSize,
+  SIZE_FACTOR,
   pageNodeId,
   scopeNodeId,
 } from "../../src/components/knowledge/graphElements";
@@ -25,8 +26,8 @@ describe("nodeSize", () => {
   it("grows with the square root of degree, not linearly", () => {
     const at4 = nodeSize(4); // sqrt(4) = 2
     const at16 = nodeSize(16); // sqrt(16) = 4 — double the sqrt, not 4x
-    expect(at4).toBe(MIN_NODE_SIZE + 2 * 8);
-    expect(at16).toBe(MIN_NODE_SIZE + 4 * 8);
+    expect(at4).toBe(MIN_NODE_SIZE + 2 * SIZE_FACTOR);
+    expect(at16).toBe(MIN_NODE_SIZE + 4 * SIZE_FACTOR);
   });
 
   it("never exceeds MAX_NODE_SIZE even for a very high degree", () => {

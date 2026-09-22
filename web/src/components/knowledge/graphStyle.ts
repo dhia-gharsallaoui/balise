@@ -183,11 +183,25 @@ export function buildGraphStylesheet(palette: GraphPalette): StylesheetJsonBlock
         "text-valign": "top",
         "text-halign": "center",
         "font-family": palette.fontUi,
-        "font-size": 13,
+        "font-size": 15,
+        // Scope labels are always on (no text-opacity toggle below) — min-zoomed-font-size
+        // keeps them at a legible on-screen size even when the fit-to-content zoom is well
+        // under 1, instead of shrinking in lockstep with the rest of the canvas.
+        "min-zoomed-font-size": 15,
         "font-weight": 600,
         color: palette.ink2,
         "text-margin-y": -6,
         padding: "28px",
+        // Cytoscape's compound auto-sizing defaults to "include" here — the scope box is
+        // sized to fit every descendant's label bounding box regardless of that label's
+        // text-opacity. Since almost all node labels are invisible at rest (graphStyle's own
+        // density cascade below), that default was inflating every scope box to the width of
+        // its widest hidden title (e.g. "Recreating an AKS node pool drops custom taints"),
+        // which was large enough that adjacent scope boxes overlapped on screen even though
+        // the node circles inside them never did. "exclude" sizes the box to the children's
+        // actual rendered geometry (nodes + padding), which is what a compound cluster
+        // boundary should reflect.
+        "compound-sizing-wrt-labels": "exclude",
       },
     },
     {
@@ -202,7 +216,12 @@ export function buildGraphStylesheet(palette: GraphPalette): StylesheetJsonBlock
         "border-color": palette.surface,
         label: "data(label)",
         "font-family": palette.fontUi,
-        "font-size": 11,
+        "font-size": 14,
+        // Whichever labels the density cascade below turns on (hubs/centre at rest, every
+        // label once zoomed past HUB_ZOOM_THRESHOLD) must still be readable at whatever zoom
+        // fit-to-content settled on — this floors their on-screen size at 14px regardless of
+        // how zoomed out the view is, so "fewer labels, but legible" actually holds at rest.
+        "min-zoomed-font-size": 14,
         color: palette.ink,
         "text-valign": "bottom",
         "text-halign": "center",

@@ -1,7 +1,9 @@
-import cytoscape, { type Core, type ElementDefinition } from "cytoscape";
+import cytoscape, { type Core, type ElementDefinition, type NodeSingular } from "cytoscape";
 import type { PageRef } from "../../lib/types";
 import fcose from "cytoscape-fcose";
+import layoutUtilities from "cytoscape-layout-utilities";
 import { useEffect, useRef, useState } from "react";
+import { MIN_NODE_SIZE } from "./graphElements";
 import { buildGraphStylesheet, HUB_ZOOM_THRESHOLD, readGraphPalette, watchThemeChange } from "./graphStyle";
 
 // Owns the one thing graphElements.ts and graphStyle.ts deliberately know nothing about:
@@ -30,11 +32,20 @@ interface UseCytoscapeGraphHandle {
   fitToContent: () => void;
 }
 
-let fcoseRegistered = false;
-function ensureFcoseRegistered(): void {
-  if (fcoseRegistered) return;
+let layoutExtensionsRegistered = false;
+// fcose's `packComponents: true` option (buildLayoutOptions below) is a documented no-op
+// unless cytoscape-layout-utilities is also registered — see the .d.ts shim for that module.
+// Without it, the 4 top-level scope compounds (which never share an edge, by
+// globalGraph.ts's design) and every isolated single-node "component" all go through fcose's
+// force layout as one undifferentiated pass, with nothing to pull the disconnected pieces
+// back together afterwards — which is what left fit-to-content zoomed out far enough that
+// nodes and labels shrank to illegible sizes. Registering both extensions together is what
+// makes packComponents actually pack.
+function ensureLayoutExtensionsRegistered(): void {
+  if (layoutExtensionsRegistered) return;
   cytoscape.use(fcose);
-  fcoseRegistered = true;
+  cytoscape.use(layoutUtilities);
+  layoutExtensionsRegistered = true;
 }
 
 function prefersReducedMotion(): boolean {
@@ -54,15 +65,22 @@ interface FcoseLayoutOptions {
   padding: number;
   nodeDimensionsIncludeLabels: boolean;
   tile: boolean;
+  tilingPaddingVertical: number;
+  tilingPaddingHorizontal: number;
   packComponents: boolean;
   nestingFactor: number;
   gravity: number;
   gravityCompound: number;
+  nodeSeparation: number;
   idealEdgeLength: number;
   edgeElasticity: number;
-  nodeRepulsion: number;
+  nodeRepulsion: (node: NodeSingular) => number;
   randomize: boolean;
 }
+
+// Fit-to-content padding shared by the initial layout and the manual "fit to view" button —
+// kept small (vs. the old 48px) so the fitted view spends its space on content, not margin.
+const FIT_PADDING = 28;
 
 function buildLayoutOptions(): FcoseLayoutOptions {
   const reducedMotion = prefersReducedMotion();
@@ -72,18 +90,106 @@ function buildLayoutOptions(): FcoseLayoutOptions {
     animate: !reducedMotion,
     animationDuration: 400,
     fit: true,
-    padding: 48,
-    nodeDimensionsIncludeLabels: true,
+    padding: FIT_PADDING,
+    // Most labels are hidden at rest (graphStyle.ts's density cascade: only hubs/centre show
+    // a label until you zoom past HUB_ZOOM_THRESHOLD) — but fcose still reserves each node's
+    // *full label text width* as layout footprint when this is true, regardless of whether
+    // that label is actually painted. Measured live: with this on, the packed graph's
+    // bounding box was 3-4x larger than the container needed for legible-zoom fit (a title
+    // like "Recreating an AKS node pool drops custom taints" reserves ~250 model-space px of
+    // width for one 34px circle). False trades a little more label crowding once you zoom in
+    // close (where there's room to pan around it) for a graph that actually fits and reads at
+    // rest, which is what was asked for.
+    nodeDimensionsIncludeLabels: false,
     tile: true,
+    // Isolated (degree-0) nodes are tiled into one tidy block rather than scattered as
+    // separate one-node components — tightened from fcose's own default (10/10) so that
+    // block doesn't itself read as a second empty-looking region.
+    tilingPaddingVertical: 6,
+    tilingPaddingHorizontal: 6,
     packComponents: true,
     nestingFactor: 0.1,
-    gravity: 0.3,
-    gravityCompound: 1.2,
-    idealEdgeLength: 80,
+    // Below fcose's own defaults (gravity 0.25, gravityCompound 1.0) on purpose: the previous
+    // values (0.3 / 1.2) plus an above-default nodeRepulsion/idealEdgeLength were spreading
+    // each scope's members out more than necessary. Pulling harder (gravity, gravityCompound)
+    // while pushing less (nodeRepulsion, idealEdgeLength) shrinks each scope's own settled
+    // size; packComponents (now functional — see ensureLayoutExtensionsRegistered above) is
+    // what keeps the 4 scopes themselves, and the isolated-node tile, close together.
+    gravity: 0.45,
+    gravityCompound: 1.6,
+    nodeSeparation: 45,
+    idealEdgeLength: 42,
     edgeElasticity: 0.45,
-    nodeRepulsion: 6000,
+    // A function, not a flat number: turning off nodeDimensionsIncludeLabels (above) stopped
+    // fcose reserving room for *every* node's label, which is what let the graph pack tightly
+    // — but it also stopped reserving room for the handful of labels that are always visible
+    // (hubs and the ego centre, per graphStyle.ts's cascade), and those were measured
+    // overlapping each other at rest once the graph tightened up. Giving only
+    // `data("labelAlways")` nodes extra repulsion pushes the always-labelled few further
+    // apart from their neighbours without re-inflating spacing around the majority of nodes,
+    // whose labels stay hidden until zoomed in anyway.
+    nodeRepulsion: (node: NodeSingular) => (node.data("labelAlways") ? 14000 : 2600),
     randomize: true,
   };
+}
+
+// However tightly fcose packs things, fit-to-content can still land on a low zoom for a
+// large or spread-out graph — and a low zoom shrinks node/label pixel size right along with
+// it, since both are defined in Cytoscape's model-space units. This is the backstop the
+// layout/packing tuning above can't fully guarantee on its own: after any auto-fit (initial
+// layout, or the "fit to view" button), if the resulting zoom would render even the smallest
+// node under MIN_NODE_SCREEN_PX on screen, zoom back in toward that floor instead of leaving
+// it that small. Trades "everything visible at once" for "what's visible is legible" —
+// panning covers the rest, same as before.
+const MIN_NODE_SCREEN_PX = 26;
+
+// Bound on how much clampZoomFloor is allowed to zoom in past the natural fit: raising zoom
+// with no regard for how large the content actually is can leave most of the graph outside
+// the viewport entirely (proven live during the fix round — forcing zoom up on an untamed
+// layout took a "half-filled canvas" complaint to "almost nothing visible"). Never zoom in
+// far enough that less than this fraction of the content's bounding box, on either axis,
+// would remain in view — legible-but-mostly-off-screen is worse than the size floor missed.
+const MIN_VISIBLE_FRACTION = 0.6;
+
+// cytoscape-layout-utilities defaults to packing components toward a square (1:1) arrangement,
+// which fights a landscape container: a wide, short canvas is left with unused width if the
+// packed content is roughly as tall as it is wide (this is exactly what left a chunk of the
+// tallest scope cut off above the container's edge during the fix round — packing was
+// tightening the layout, but into the wrong aspect ratio for where it had to fit). Matching
+// the packer's target aspect ratio to the container's actual aspect ratio, and tightening its
+// default 80px inter-component gap to match the smaller gaps used elsewhere in this layout
+// (tilingPaddingVertical/Horizontal above), lets fit-to-content use the space it has instead
+// of the space a square packing would need.
+function configureComponentPacking(cy: Core): void {
+  const width = cy.width();
+  const height = cy.height();
+  cy.layoutUtilities({
+    desiredAspectRatio: width > 0 && height > 0 ? width / height : 1,
+    // Measured live: utilityFunction 2 (blend fullness + aspect match) was tried and
+    // reverted — it hit the target aspect ratio more closely but did so by leaving far more
+    // empty space inside the packed bounding box (component footprint grew ~75% versus
+    // utilityFunction 1 on the same graph), which is a worse trade for "fill the canvas"
+    // than the small aspect-ratio mismatch left over from the default fullness-first
+    // utility. Left at the default (1) deliberately.
+    componentSpacing: 24,
+  });
+}
+
+function clampZoomFloor(cy: Core): void {
+  const floorZoom = MIN_NODE_SCREEN_PX / MIN_NODE_SIZE;
+  const currentZoom = cy.zoom();
+  if (currentZoom >= floorZoom) return;
+
+  const bb = cy.elements().boundingBox();
+  const safeZoomCap =
+    bb.w > 0 && bb.h > 0
+      ? Math.min(cy.width() / (bb.w * MIN_VISIBLE_FRACTION), cy.height() / (bb.h * MIN_VISIBLE_FRACTION))
+      : floorZoom;
+  const targetZoom = Math.max(currentZoom, Math.min(floorZoom, safeZoomCap));
+  if (targetZoom <= currentZoom) return;
+
+  cy.zoom({ level: targetZoom, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
+  cy.center(cy.elements());
 }
 
 export function useCytoscapeGraph(options: UseCytoscapeGraphOptions): UseCytoscapeGraphHandle {
@@ -101,14 +207,18 @@ export function useCytoscapeGraph(options: UseCytoscapeGraphOptions): UseCytosca
 
     let cy: Core | null = null;
     try {
-      ensureFcoseRegistered();
+      ensureLayoutExtensionsRegistered();
       cy = cytoscape({
         container,
         elements,
         style: buildGraphStylesheet(readGraphPalette()),
-        layout: buildLayoutOptions() as unknown as cytoscape.LayoutOptions,
         wheelSensitivity: 0.2,
       });
+      // Must run after the core exists (needs cy.width()/height()) but before the first
+      // layout — fcose fetches whatever layoutUtilities instance is already configured on
+      // this cy ("get", no options) rather than creating a default-options one of its own.
+      configureComponentPacking(cy);
+      cy.layout(buildLayoutOptions() as unknown as cytoscape.LayoutOptions).run();
     } catch {
       // No 2D canvas context (jsdom in unit tests) or another mounting failure — the
       // accessible list is still fully functional, so this is a degradation, not a crash.
@@ -153,6 +263,10 @@ export function useCytoscapeGraph(options: UseCytoscapeGraphOptions): UseCytosca
     };
     cy.on("zoom pan", syncZoomClass);
     syncZoomClass();
+    // fcose's own `fit: true` runs once the layout (and, unless reduced-motion, its 400ms
+    // settle animation) finishes — `layoutstop` fires after that, so this is the first safe
+    // point to check whether the fit it chose left nodes too small and correct it.
+    cy.on("layoutstop", () => clampZoomFloor(cy));
 
     let resizeObserver: ResizeObserver | undefined;
     if (typeof ResizeObserver !== "undefined") {
@@ -197,8 +311,9 @@ export function useCytoscapeGraph(options: UseCytoscapeGraphOptions): UseCytosca
       const cy = cyRef.current;
       if (!cy) return;
       cy.animate({
-        fit: { eles: cy.elements(), padding: 48 },
+        fit: { eles: cy.elements(), padding: FIT_PADDING },
         duration: prefersReducedMotion() ? 0 : 200,
+        complete: () => clampZoomFloor(cy),
       });
     },
   };
