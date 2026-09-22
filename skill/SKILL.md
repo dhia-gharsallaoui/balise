@@ -1,6 +1,6 @@
 ---
 name: balise
-description: Use when a Balise vault is connected over MCP. Read from it before answering questions about this codebase, these systems, or past decisions, and write back to it when you establish something durable that is not already recorded.
+description: Use BEFORE answering any question about infrastructure, tooling, configuration, deployment, operational practice, or how something here works or was decided — a Balise vault is connected over MCP and may hold a recorded team decision that overrides the general best-practice answer. Also use when you establish something durable worth recording.
 ---
 
 # Balise
@@ -13,9 +13,20 @@ Two habits. Read before you answer. Write when you learn.
 
 ## Read first
 
-Before answering anything about this codebase, this infrastructure, how something was
-configured, or why something was decided, **call `context` first**. The answer may already
-be there, written down by someone who debugged it properly.
+**Call `context` before answering, even when you already know a good general answer.** That
+is the whole point: the vault records what *this* team decided, and a recorded decision
+outranks best practice.
+
+A worked example. Asked "should I use `terraform apply -auto-approve` on shared
+infrastructure?", the sensible general answer is "not interactively, but it is fine in CI
+with guardrails". This vault says something narrower and stricter — never against shared
+state, hand the user a saved plan file to run themselves. Answering from general knowledge
+is not wrong in the abstract and is still the wrong answer here, and nothing in the question
+signals that. Only the vault does.
+
+So the trigger is not "does this sound like it is about their codebase". It is: could this
+team have an opinion on it? For infrastructure, tooling, configuration, deployment and
+operational practice, assume yes and check.
 
 ```
 context(query: "why does the apply fail on shared infrastructure", budget_tokens: 6000)
