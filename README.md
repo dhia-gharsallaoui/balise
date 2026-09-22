@@ -71,8 +71,21 @@ reindexed. A to-do list that only grows is noise.
 
 ## Quickstart
 
+Fastest way to see it running, no data of your own needed:
+
 ```bash
 git clone https://github.com/dhia-gharsallaoui/balise.git && cd balise
+make demo   # builds a small fictional vault + indexes it into its own DB schema
+```
+
+`make demo` prints the exact `make up ...` command to start the app against that
+vault — it never touches your own vault or index. The vault (`cmd/demo-vault`) is
+generated deterministically: rerunning `make demo` reproduces the same pages, claims,
+and git history byte-for-byte.
+
+To run it against your own data instead:
+
+```bash
 cp .env.example .env          # set BALISE_PASSWORD
 docker compose up -d          # Postgres on :5433, or bring your own
 make up DSN=postgresql://balise:balise@localhost:5433/balise

@@ -6,6 +6,7 @@
 #   make status    what is running, and what is listening where
 #   make logs      tail both logs
 #   make test      the full suite
+#   make demo      build a small fictional demo vault, index it, print how to run it
 #
 # Only ONE port ever needs to be reachable. Vite proxies /api to the Go API over
 # loopback (see web/vite.config.ts), so the API does not have to listen on a public
@@ -25,12 +26,26 @@ SHELL := /bin/sh
 
 VAULT     ?= /tmp/balise-live
 DSN       ?= postgresql://balise:balise@localhost:5432/balise
+DEFAULTS  ?= defaults
 API_ADDR  ?= 127.0.0.1:8099
 UI_HOST   ?= 127.0.0.1
 UI_PORT   ?= 5173
 # Owner password gating /api (see cmd/balise/main.go's requirePasswordForNonLoopback).
 # Empty is fine as long as API_ADDR stays loopback; required otherwise.
 PASSWORD  ?= $(BALISE_PASSWORD)
+
+# The demo vault: a small, entirely fictional vault (cmd/demo-vault) for README
+# screenshots and local exploration, kept out of the live VAULT/DSN above so `make demo`
+# can never touch the owner's real vault or its index. Its own Postgres schema
+# (demo_vault, created by `make demo` itself if missing) keeps it out of the live index too.
+# DEMO_ADDR keeps the default port (8099): web/vite.config.ts's dev-server proxy target is
+# fixed at 127.0.0.1:8099 (only the host varies for `make expose`), so the API must stay on
+# that port for the browser to actually reach it through the Vite dev server. Run the demo
+# with `make down` first if the default `make up` pair is already using that port.
+DEMO_VAULT    ?= demo-vault
+DEMO_DEFAULTS ?= demo-vault-defaults
+DEMO_DSN      ?= postgresql://balise:balise@localhost:5432/balise?search_path=demo_vault,public
+DEMO_ADDR     ?= 127.0.0.1:8099
 
 RUN_DIR   := .run
 API_PID   := $(RUN_DIR)/api.pid
@@ -40,7 +55,7 @@ UI_LOG    := $(RUN_DIR)/ui.log
 
 API_PORT  := $(lastword $(subst :, ,$(API_ADDR)))
 
-.PHONY: up expose down status logs test build deps check-db check-password restart help
+.PHONY: up expose down status logs test build deps check-db check-password restart help demo
 .DEFAULT_GOAL := help
 
 help:
@@ -50,6 +65,7 @@ help:
 	@echo "make status   what is running"
 	@echo "make logs     tail both logs"
 	@echo "make test     full suite (go + vitest + playwright)"
+	@echo "make demo     build+index a small fictional demo vault, print how to run it"
 
 build:
 	@go build -o bin/balise ./cmd/balise
@@ -60,7 +76,7 @@ deps:
 # Postgres holds everything derived; without it the API starts and then fails every
 # request, which looks like a UI bug rather than a missing service. Fail here instead.
 check-db:
-	@pg_isready -q -d "$(DSN)" 2>/dev/null || { \
+	@d="$(DSN)"; pg_isready -q -d "$${d%%\?*}" 2>/dev/null || { \
 		echo "Postgres is not accepting connections at $(DSN)"; \
 		echo "Start it, or pass another DSN: make up DSN=postgresql://..."; \
 		exit 1; }
@@ -81,11 +97,21 @@ check-password:
 		fi ;; \
 	esac
 
+demo: build check-db
+	@go run ./cmd/demo-vault -vault "$(DEMO_VAULT)" -defaults "$(DEMO_DEFAULTS)"
+	@psql "$(DSN)" -c "create schema if not exists demo_vault" >/dev/null
+	@./bin/balise reindex "$(DEMO_VAULT)" --dsn "$(DEMO_DSN)" --defaults "$(DEMO_DEFAULTS)"
+	@echo
+	@echo "Demo vault ready: $(DEMO_VAULT) (defaults: $(DEMO_DEFAULTS), schema: demo_vault)"
+	@echo "Start it:"
+	@echo "  make up VAULT=$(DEMO_VAULT) DEFAULTS=$(DEMO_DEFAULTS) DSN='$(DEMO_DSN)' API_ADDR=$(DEMO_ADDR)"
+	@echo "Then open http://localhost:$(UI_PORT)"
+
 up: build deps check-db
 	@mkdir -p $(RUN_DIR)
 	@$(MAKE) --no-print-directory down >/dev/null 2>&1 || true
 	@echo "starting API on $(API_ADDR)"
-	@BALISE_DSN="$(DSN)" BALISE_PASSWORD="$(PASSWORD)" nohup ./bin/balise serve "$(VAULT)" --addr "$(API_ADDR)" \
+	@BALISE_DSN="$(DSN)" BALISE_PASSWORD="$(PASSWORD)" nohup ./bin/balise serve "$(VAULT)" --addr "$(API_ADDR)" --defaults "$(DEFAULTS)" \
 		> $(API_LOG) 2>&1 & echo $$! > $(API_PID)
 	@echo "starting UI  on $(UI_HOST):$(UI_PORT)"
 	@cd web && BALISE_ALLOWED_HOSTS="$(BALISE_ALLOWED_HOSTS)" \
