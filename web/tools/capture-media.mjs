@@ -258,7 +258,10 @@ async function main() {
       await p.goto(`${BASE}/knowledge`); await ready(p); await pause(p, 600);
     }});
     await shot(browser, session, { name: `graph${s}`, theme, go: async (p) => {
-      await p.goto(`${BASE}/knowledge?view=Graph`); await p.locator(".cy-container canvas").first().waitFor(); await pause(p, 1800);
+      await p.goto(`${BASE}/knowledge?view=Graph`); await p.locator(".cy-container canvas").first().waitFor();
+      // The canvas mounts immediately; fcose then lays out asynchronously and the view is
+      // fitted only once it settles. Waiting on the element alone captures nodes mid-flight.
+      await pause(p, 4500);
     }});
     await shot(browser, session, { name: `review${s}`, theme, go: async (p) => {
       await p.goto(`${BASE}/review`); await pause(p, 1400);
@@ -288,7 +291,17 @@ async function main() {
     // "failover" in the box narrows it to two pages and there is nothing to look at.
     await p.getByPlaceholder("Search claims…").fill(""); await pause(p, 900);
     await rec.click(p.locator(".kn-viewmode button", { hasText: "Graph" }), "Switch to the relation graph");
-    await p.locator(".cy-container canvas").first().waitFor({ timeout: 20_000 }); await pause(p, 2800);
+    await p.locator(".cy-container canvas").first().waitFor({ timeout: 20_000 });
+    await pause(p, 4200);
+    // Zoom in, then fit. Two reasons. It shows the graph is navigable rather than a static
+    // picture, and — less obviously — it keeps the segment at all: screencli's compose step
+    // trims idle time, and a long settle pause with no events in it is idle by definition.
+    // The first cut of this clip ended on an empty panel because the whole graph section
+    // had been trimmed away.
+    await rec.click(p.getByRole("button", { name: "Zoom in" }), "Zoom into the graph");
+    await pause(p, 1600);
+    await rec.click(p.getByRole("button", { name: "Fit graph to view" }), "Fit the whole graph");
+    await pause(p, 2400);
   }});
 
   // The thesis: an agent proposed something, a human decides. Nothing is applied until
