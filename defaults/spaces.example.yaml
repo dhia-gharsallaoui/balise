@@ -58,7 +58,3 @@
 - name: Initech
   scope: client-initech
   filter: {tags: []}
-
-- name: Umbrella
-  scope: client-umbrella
-  filter: {tags: []}

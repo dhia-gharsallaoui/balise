@@ -13,7 +13,7 @@
 // store.GitPageStore.Commit, which hardcodes time.Now() internally and so cannot produce a
 // reproducible history.
 //
-// The five commit authors below (Dhia, Marcus Webb, Priya Nair, Sana Idris, Leo Ferreira) and
+// The five commit authors below (Ada Okonkwo, Marcus Webb, Priya Nair, Sana Idris, Leo Ferreira) and
 // every "@platform.example" address are invented for this vault; ".example" is the address
 // reserved for documentation use by RFC 2606, so none of it resolves to anything real. This
 // matters because the sandbox's global git config carries the real repo owner's personal
@@ -34,7 +34,7 @@ import (
 type author struct{ name, email string }
 
 var (
-	authorDhia   = author{"Dhia", "dhia@platform.example"}
+	authorAda    = author{"Ada Okonkwo", "ada@platform.example"}
 	authorMarcus = author{"Marcus Webb", "marcus.webb@platform.example"}
 	authorPriya  = author{"Priya Nair", "priya.nair@platform.example"}
 	authorSana   = author{"Sana Idris", "sana.idris@platform.example"}
@@ -60,7 +60,7 @@ func commitGroups() []commitGroup {
 	return []commitGroup{
 		{
 			message: "chore: seed the shared ExpressRoute transit hub and AKS fleet entities",
-			by:      authorDhia, date: "2026-08-04T10:00:00Z",
+			by:      authorAda, date: "2026-08-04T10:00:00Z",
 			pages: work[0:4], // expressroute-transit, shared-aks-fleet, both node-image states
 		},
 		{
@@ -70,7 +70,7 @@ func commitGroups() []commitGroup {
 		},
 		{
 			message: "feat: adopt the shared fleet and per-subscription workspace decisions",
-			by:      authorDhia, date: "2026-08-15T09:15:00Z",
+			by:      authorAda, date: "2026-08-15T09:15:00Z",
 			pages: work[7:10], // terraform workspaces, aks fleet model, dual-circuit standard
 		},
 		{
@@ -80,7 +80,7 @@ func commitGroups() []commitGroup {
 		},
 		{
 			message: "chore: log open platform issues and the august pipeline incident",
-			by:      authorDhia, date: "2026-08-25T11:20:00Z",
+			by:      authorAda, date: "2026-08-25T11:20:00Z",
 			pages: work[12:16], // drift detector, capacity headroom, pipeline outage, on-call note
 		},
 		{
@@ -100,7 +100,7 @@ func commitGroups() []commitGroup {
 		},
 		{
 			message: "compile: extract candidate claim updates for review",
-			by:      authorDhia, date: "2026-09-20T09:00:00Z",
+			by:      authorAda, date: "2026-09-20T09:00:00Z",
 			reviews: reviewProposals(),
 		},
 	}

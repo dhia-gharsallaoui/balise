@@ -42,7 +42,7 @@ values: {network: {}, compute: {}, storage: {}, identity: {}, observability: {},
 
 // writeDefaults assembles outDefaults (the demo's own defaults directory, wired via
 // `balise reindex/serve --defaults`) from sourceDefaults (the repo's real defaults/), so the
-// demo indexes and serves under a config that names only acme/globex/initech/umbrella and the
+// demo indexes and serves under a config that names only acme/globex/initech and the
 // generic space/facet trees the rest of this generator's content was written against.
 func writeDefaults(sourceDefaults, outDefaults string) error {
 	for _, rel := range verbatimDefaultFiles {

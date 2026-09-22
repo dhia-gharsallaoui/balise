@@ -13,4 +13,4 @@
 # colo is deliberately absent — it is the shared datacenter acme's and globex's
 # infrastructure sits inside, not a tenant of its own. platform and intranet are also
 # absent: the owner's own internal categories.
-tenants: [acme, globex, initech, umbrella]
+tenants: [acme, globex, initech]

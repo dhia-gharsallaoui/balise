@@ -15,7 +15,7 @@ func workPages() []page {
 				{ID: "c2", Status: "active", Text: "Each client circuit peers here rather than to a dedicated gateway"},
 				{ID: "c3", Status: "active", Text: "Capacity is tracked per circuit, not per gateway, since the hub is shared"},
 			},
-			Status: "active", Owner: "Dhia", LastVerified: "2026-08-04",
+			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-08-04",
 			Body: "The transit hub is the single ExpressRoute gateway pair every client circuit " +
 				"terminates on. It exists so a new client onboarding never needs a new gateway " +
 				"deployment, only a new circuit peering against the existing hub.\n\n" +
@@ -99,7 +99,7 @@ func workPages() []page {
 				{ID: "c1", Status: "active", Text: "Renaming a subscription alias reorders the for_each map, forcing unrelated recreates"},
 				{ID: "c2", Status: "active", Text: "Keying the for_each on subscription ID instead of alias avoids the reorder"},
 			},
-			Status: "active", Owner: "Dhia", LastVerified: "2026-08-20",
+			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-08-20",
 			Body: "The landing zone module iterates subscriptions with `for_each` keyed on the " +
 				"human-readable alias. Renaming one alias changes the map's key set, which " +
 				"Terraform treats as every other key changing position, and it plans recreates " +
@@ -114,7 +114,7 @@ func workPages() []page {
 				{ID: "c1", Status: "active", Text: "Imported rule collections above priority 65000 are silently clamped on import"},
 				{ID: "c2", Status: "active", Text: "Clamped rules still show their original priority in the portal view"},
 			},
-			Status: "active", Owner: "Dhia", LastVerified: "2026-07-30",
+			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-07-30",
 			Body: "Importing a firewall policy exported from a different tenant can carry rule " +
 				"collection priorities above the 65000 ceiling. The import clamps them rather " +
 				"than rejecting the import, and the portal keeps showing the original number, so " +
@@ -128,7 +128,7 @@ func workPages() []page {
 				{ID: "c1", Status: "active", Text: "One workspace per subscription replaces the prior single-workspace-per-region model"},
 				{ID: "c2", Status: "active", Text: "State blast radius is now bounded to one subscription per apply"},
 			},
-			Status: "active", Owner: "Dhia", LastVerified: "2026-08-01",
+			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-08-01",
 			Body: "Adopted a one-workspace-per-subscription layout so a bad apply can only affect " +
 				"one subscription's state. This replaced the earlier single-workspace-per-region " +
 				"layout, which meant every apply touched every client sharing that region.\n\n" +
@@ -156,7 +156,7 @@ func workPages() []page {
 				{ID: "c1", Status: "active", Text: "Tier 2+ clients get two circuits in different peering locations"},
 				{ID: "c2", Status: "active", Text: "Tier 1 clients keep a single circuit unless they request otherwise"},
 			},
-			Status: "active", Owner: "Dhia", LastVerified: "2026-08-05",
+			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-08-05",
 			Body: "Any client above tier 2 now gets two [[expressroute-transit]] circuits in " +
 				"different peering locations rather than one. [[expressroute-capacity-headroom-shrinking]] " +
 				"is tracking how much headroom this standard leaves on the shared hub.\n",
@@ -170,7 +170,7 @@ func workPages() []page {
 				{ID: "c2", Status: "active", Text: "Grant the landing zone service principal Owner only at the subscription scope"},
 				{ID: "c3", Status: "active", Text: "Run drift detection once immediately after the first apply completes"},
 			},
-			Status: "active", Owner: "Dhia", LastVerified: "2026-08-18",
+			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-08-18",
 			Body: "1. Create the subscription and its dedicated Terraform workspace per " +
 				"[[adopt-terraform-workspaces-per-subscription]].\n" +
 				"2. Grant the landing zone service principal Owner at the subscription scope " +
@@ -202,7 +202,7 @@ func workPages() []page {
 				{ID: "c1", Status: "active", Text: "Cost-center tags applied by the billing sync are flagged as drift"},
 				{ID: "c2", Status: "active", Text: "Detector runs hourly and re-flags the same tags every cycle"},
 			},
-			Status: "open", Owner: "Dhia", LastVerified: "2026-09-12",
+			Status: "open", Owner: "Ada Okonkwo", LastVerified: "2026-09-12",
 			Body: "The drift detector treats any tag it did not itself apply as drift, " +
 				"including cost-center tags written by the separate billing sync job. This makes " +
 				"every subscription look perpetually drifted on that one field.\n\n" +
@@ -216,7 +216,7 @@ func workPages() []page {
 				{ID: "c1", Status: "active", Text: "Aggregate circuit usage crossed 70 percent of hub capacity in August"},
 				{ID: "c2", Status: "active", Text: "Each new tier 2+ client adds two circuits under the dual standard"},
 			},
-			Status: "open", Owner: "Dhia", LastVerified: "2026-09-02",
+			Status: "open", Owner: "Ada Okonkwo", LastVerified: "2026-09-02",
 			Body: "Aggregate usage across all circuits on [[expressroute-transit]] crossed 70 " +
 				"percent of the hub's provisioned capacity in August, driven partly by " +
 				"[[expressroute-dual-circuit-standard]] doubling circuit count for new tier 2+ " +
@@ -232,7 +232,7 @@ func workPages() []page {
 				{ID: "c2", Status: "active", Text: "An on-call triage agent drained the queue once the runner pool recovered"},
 				{ID: "c3", Status: "active", Text: "No subscription apply was lost; queued runs replayed in original order"},
 			},
-			Status: "resolved", Owner: "Dhia", LastVerified: "2026-08-22",
+			Status: "resolved", Owner: "Ada Okonkwo", LastVerified: "2026-08-22",
 			Body: "The shared CI runner pool backing every landing zone pipeline run went " +
 				"unhealthy for roughly six hours, backing up the apply queue across every " +
 				"subscription onboarded via [[onboard-new-subscription-to-landing-zone]].\n\n" +
@@ -249,7 +249,7 @@ func workPages() []page {
 				{ID: "c1", Status: "active", Text: "Primary on-call rotates weekly, Monday 09:00 handoff"},
 				{ID: "c2", Status: "active", Text: "Secondary escalation is the platform lead, paged after fifteen minutes"},
 			},
-			Status: "active", Owner: "Dhia", LastVerified: "2026-09-15",
+			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-09-15",
 			Body: "Primary on-call rotates weekly with a Monday 09:00 handoff. Unacknowledged " +
 				"pages escalate to the secondary (platform lead) after fifteen minutes.\n\n" +
 				"For the step-by-step escalation flowchart, see " +
