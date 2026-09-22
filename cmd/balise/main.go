@@ -57,7 +57,7 @@ func compileCmd() *cobra.Command {
 // token counts are printed unconditionally so a real run's cost is always
 // visible, not just available in the returned Report.
 func extractClaimsCmd() *cobra.Command {
-	var scope, model string
+	var scope, model, defaults string
 	var limit int
 	var dryRun bool
 	cmd := &cobra.Command{
@@ -77,7 +77,12 @@ func extractClaimsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			reg, err := registry.Load("defaults/types")
+			defaultsDir, cleanup, err := resolveDefaultsDir(cmd, "defaults", defaults, args[0])
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			reg, err := registry.Load(filepath.Join(defaultsDir, "types"))
 			if err != nil {
 				return fmt.Errorf("load type registry: %w", err)
 			}
@@ -112,6 +117,7 @@ func extractClaimsCmd() *cobra.Command {
 	cmd.Flags().IntVar(&limit, "limit", 0, "cap the number of pages attempted (0 = unlimited)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "render prompts and exit without calling the model or writing anything")
 	cmd.Flags().StringVar(&model, "model", defaultExtractClaimsModel, "model name passed to the LLM client")
+	cmd.Flags().StringVar(&defaults, "defaults", "defaults", defaultsFlagHelp)
 	return cmd
 }
 
@@ -179,12 +185,17 @@ func importCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			defaultsDir, cleanup, err := resolveDefaultsDir(cmd, "defaults", defaults, args[0])
+			if err != nil {
+				return err
+			}
+			defer cleanup()
 			// Which customer/* facet values name an actual tenant — as opposed to the
 			// datacenter (colo) or the owner's own internal categories (platform, intranet)
 			// that also live in the customer/ facet namespace — is the security partition
 			// governing scope assignment, so it is loaded from owner-editable data
 			// (defaults/tenants.yaml) rather than baked into this binary.
-			tenants, err := registry.LoadTenants(filepath.Join(defaults, "tenants.yaml"))
+			tenants, err := registry.LoadTenants(filepath.Join(defaultsDir, "tenants.yaml"))
 			if err != nil {
 				return err
 			}
@@ -200,18 +211,18 @@ func importCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&corpus, "corpus", "", "Claude Code memory directory")
 	cmd.Flags().StringVar(&artifacts, "artifacts", "", "factory-validation/out directory")
-	cmd.Flags().StringVar(&defaults, "defaults", "defaults", "directory holding types/, facets/, spaces.yaml, order.yaml, tenants.yaml")
+	cmd.Flags().StringVar(&defaults, "defaults", "defaults", defaultsFlagHelp)
 	_ = cmd.MarkFlagRequired("corpus")
 	_ = cmd.MarkFlagRequired("artifacts")
 	return cmd
 }
 
-// reindexCmd's --defaults flag defaults to "defaults" (the repo-relative directory holding
-// types/, facets/, spaces.yaml and order.yaml when balise runs from the repo root) and is
-// passed straight through to cli.Reindex as an explicit argument. It must never be a literal
-// baked into this function: go test runs internal/cli's acceptance tests with internal/cli as
-// their working directory, which is why cli.Reindex takes defaultsDir as a parameter at all
-// rather than hardcoding a relative path itself.
+// reindexCmd's --defaults flag is resolved by resolveDefaultsDir (explicit flag, then
+// <vault>/defaults, then defaults/ beside the vault, then the embedded copy) and the
+// result is passed straight through to cli.Reindex as an explicit argument. It must
+// never be a literal baked into this function: go test runs internal/cli's acceptance
+// tests with internal/cli as their working directory, which is why cli.Reindex takes
+// defaultsDir as a parameter at all rather than hardcoding a relative path itself.
 func reindexCmd(dsn *string) *cobra.Command {
 	var defaults string
 	cmd := &cobra.Command{
@@ -223,6 +234,11 @@ func reindexCmd(dsn *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			defaultsDir, cleanup, err := resolveDefaultsDir(cmd, "defaults", defaults, args[0])
+			if err != nil {
+				return err
+			}
+			defer cleanup()
 			// The vault's own directory layout (scope = directory, 04 section 14) is
 			// consulted so a scope that only ever exists on disk so far — such as one the
 			// importer's multi-customer quarantine logic names on the fly — is authorised
@@ -237,7 +253,7 @@ func reindexCmd(dsn *string) *cobra.Command {
 			}
 			defer pool.Close()
 
-			report, err := cli.Reindex(ctx, q, pages, defaults)
+			report, err := cli.Reindex(ctx, q, pages, defaultsDir)
 			if err != nil {
 				return err
 			}
@@ -261,7 +277,7 @@ func reindexCmd(dsn *string) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&defaults, "defaults", "defaults", "directory holding types/, facets/, spaces.yaml and order.yaml")
+	cmd.Flags().StringVar(&defaults, "defaults", "defaults", defaultsFlagHelp)
 	return cmd
 }
 
@@ -291,6 +307,20 @@ func serveCmd(dsn *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			defaultsDir, cleanup, err := resolveDefaultsDir(cmd, "defaults", defaults, args[0])
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			// When --defaults falls all the way through to the embedded copy (see
+			// resolveDefaultsDir), defaultsDir is a temp directory that vanishes at
+			// process exit. POST /api/scopes (internal/api/scopes.go) appends to
+			// scopes.yaml there, so a scope declared that way would not survive a
+			// restart. That is an accepted consequence of running serve with no
+			// persistent registry available -- not a bug in this fix -- and it is
+			// exactly why the vault-relative and vault-sibling tiers exist: point
+			// --defaults, or ship a defaults/ directory, at anything you want writes
+			// like that to persist across restarts.
 			vaultScopes, err := store.DiscoverVaultScopes(pages)
 			if err != nil {
 				return err
@@ -300,7 +330,7 @@ func serveCmd(dsn *string) *cobra.Command {
 			// point of declaring one ahead of time — so they must be folded into the
 			// initial scope set here too, not just picked up by the live rebuild that
 			// runs when the API creates a new one after this process is already up.
-			declaredScopes, err := registry.LoadDeclaredScopes(filepath.Join(defaults, "scopes.yaml"))
+			declaredScopes, err := registry.LoadDeclaredScopes(filepath.Join(defaultsDir, "scopes.yaml"))
 			if err != nil {
 				return err
 			}
@@ -310,11 +340,11 @@ func serveCmd(dsn *string) *cobra.Command {
 			}
 			defer pool.Close()
 
-			spaces, err := registry.LoadSpaces(filepath.Join(defaults, "spaces.yaml"))
+			spaces, err := registry.LoadSpaces(filepath.Join(defaultsDir, "spaces.yaml"))
 			if err != nil {
 				return err
 			}
-			order, err := registry.LoadOrder(filepath.Join(defaults, "order.yaml"))
+			order, err := registry.LoadOrder(filepath.Join(defaultsDir, "order.yaml"))
 			if err != nil {
 				return err
 			}
@@ -332,7 +362,7 @@ func serveCmd(dsn *string) *cobra.Command {
 			// database either way, but one live connection pool per process is the
 			// intent, and now serve actually delivers that.
 			outer := http.NewServeMux()
-			outer.Handle("/", api.New(q, pages, spaces, order, defaults,
+			outer.Handle("/", api.New(q, pages, spaces, order, defaultsDir,
 				api.WithOwnerPassword(password), api.WithTokenPool(pool)))
 			outer.Handle("/mcp", mcp.NewHandler(pool, pages, order, mcpRateLimit))
 
@@ -341,7 +371,7 @@ func serveCmd(dsn *string) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&addr, "addr", "127.0.0.1:8080", "listen address")
-	cmd.Flags().StringVar(&defaults, "defaults", "defaults", "directory holding types/, facets/, spaces.yaml, order.yaml")
+	cmd.Flags().StringVar(&defaults, "defaults", "defaults", defaultsFlagHelp)
 	cmd.Flags().IntVar(&mcpRateLimit, "mcp-rate-limit", 0, "MCP calls allowed per token per minute (0 = default, 60)")
 	cmd.Flags().StringVar(&password, "password", envOr("BALISE_PASSWORD", ""),
 		"owner password gating /api (env BALISE_PASSWORD); required when --addr is not loopback")
@@ -418,6 +448,16 @@ func mcpCmd(dsn *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Resolved here rather than left as the literal "defaults": an MCP host
+			// spawns this subcommand with no cwd assumption at all (it is not run
+			// from this repo, or from any particular directory), so a cwd-relative
+			// default would fail for exactly the documented README config. See
+			// resolveDefaultsDir for the fallback chain that fixes this.
+			defaultsDir, cleanup, err := resolveDefaultsDir(cmd, "defaults", defaults, args[0])
+			if err != nil {
+				return err
+			}
+			defer cleanup()
 			vaultScopes, err := store.DiscoverVaultScopes(pages)
 			if err != nil {
 				return err
@@ -428,7 +468,7 @@ func mcpCmd(dsn *string) *cobra.Command {
 			}
 			defer pool.Close()
 
-			order, err := registry.LoadOrder(filepath.Join(defaults, "order.yaml"))
+			order, err := registry.LoadOrder(filepath.Join(defaultsDir, "order.yaml"))
 			if err != nil {
 				return err
 			}
@@ -438,7 +478,7 @@ func mcpCmd(dsn *string) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&stdio, "stdio", false, "run a stdio MCP session for a local, single-user client")
 	cmd.Flags().StringVar(&token, "token", "", "bearer token whose scopes/capabilities this stdio session uses (or set BALISE_MCP_TOKEN; the env var is safer -- a flag value is visible via ps and shell history)")
-	cmd.Flags().StringVar(&defaults, "defaults", "defaults", "directory holding types/, facets/, spaces.yaml, order.yaml")
+	cmd.Flags().StringVar(&defaults, "defaults", "defaults", defaultsFlagHelp)
 	return cmd
 }
 
