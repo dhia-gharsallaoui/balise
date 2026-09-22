@@ -5,7 +5,7 @@
 **A knowledge base whose primary reader is an agent, not a person.**
 
 [![Go 1.26](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev)
-[![React 18](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![Postgres 15](https://img.shields.io/badge/Postgres-15-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![MCP](https://img.shields.io/badge/MCP-6%20tools-6E56CF)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -14,7 +14,7 @@ Your notes are markdown files in a git repo. Balise indexes them into Postgres, 
 AI agents over MCP with per-agent scoping, and gives you a web UI to review what the agents want
 to change — before anything is written.
 
-<img src="docs/media/tour.gif" alt="Searching claims for 'failover', opening the matching page in the reader, then switching to the relation graph" width="830">
+<img src="docs/media/tour.gif" alt="Searching claims for 'failover', opening the matching page in the reader, then switching to the relation graph" width="800">
 
 </div>
 
@@ -39,7 +39,7 @@ Balise takes the opposite position on all three.
 An agent found something and wants to add it. It does not touch the page — it files a proposal
 with its evidence, and you decide.
 
-<img src="docs/media/review.gif" alt="Accepting a proposal in the Review queue: the evidence and the current-versus-proposed claims are shown side by side, Accept is pressed, and the queue advances to the next proposal" width="830">
+<img src="docs/media/review.gif" alt="Accepting a proposal in the Review queue: the evidence and the current-versus-proposed claims are shown side by side, Accept is pressed, and the queue advances to the next proposal" width="800">
 
 <sup>Still frame, if the GIF does not play: [light](docs/media/review.png) · [dark](docs/media/review-dark.png)</sup>
 
@@ -189,7 +189,7 @@ flowchart TD
     R -. you accept .-> V
 ```
 
-Go 1.26 · pgx · go-git · goldmark · Postgres 15 (ltree, pg_trgm, unaccent) · React 18 · Vite ·
+Go 1.26 · pgx · go-git · goldmark · Postgres 15 (ltree, pg_trgm, unaccent) · React 19 · Vite ·
 TypeScript
 
 `internal/store/queries.go` is the only file containing SQL. The indexer is idempotent:
