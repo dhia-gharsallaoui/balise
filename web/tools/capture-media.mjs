@@ -28,10 +28,12 @@ const PASSWORD = process.env.CAPTURE_PASSWORD ?? "demo";
 const OUT = path.resolve("../docs/media");
 const TMP = "/tmp/balise-capture";
 const VIEW = { width: 1440, height: 900 };
-// Narrower than the viewport: GitHub renders README images at about 830px, so capturing
-// much wider only costs bytes. 12fps is the floor where UI motion still reads as motion.
-const GIF_WIDTH = 900;
-const GIF_FPS = 12;
+// GIFs record at a smaller viewport than the screenshots so the downscale to GIF_WIDTH is
+// gentle — resampling antialiased text hard, then quantising it to 256 colours, is what
+// turns a crisp UI into mush.
+const GIF_VIEW = { width: 1280, height: 800 };
+const GIF_WIDTH = 1000;
+const GIF_FPS = 10;
 
 const sh = (cmd, args) => execFileSync(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
 
@@ -92,9 +94,9 @@ async function gif(browser, session, { name, go }) {
   const dir = path.join(TMP, name);
   rmSync(dir, { recursive: true, force: true });
   const ctx = await browser.newContext({
-    viewport: VIEW,
+    viewport: GIF_VIEW,
     storageState: session,
-    recordVideo: { dir, size: VIEW },
+    recordVideo: { dir, size: GIF_VIEW },
   });
   const page = await ctx.newPage();
   await go(page);
@@ -108,10 +110,17 @@ async function gif(browser, session, { name, go }) {
 
   // Two passes: a palette built from the whole clip, then applied. One-pass GIF encoding
   // picks a palette per frame and makes text shimmer between frames.
+  //
+  // `dither=none` is the setting that matters. Dithering scatters pixels to fake colours a
+  // 256-entry palette does not have, which suits photographs and ruins UI: on flat panels
+  // and antialiased text it reads as speckle, and the first version of these GIFs looked
+  // visibly pixelated because of it. A UI has few enough real colours that the palette can
+  // just hold them. `--lossy=20` then halves the file with no visible cost; the original
+  // `--lossy=60` was the other half of the damage.
   sh("ffmpeg", ["-loglevel", "error", "-y", "-i", webm, "-vf", `${filters},palettegen=stats_mode=diff`, pal]);
   sh("ffmpeg", ["-loglevel", "error", "-y", "-i", webm, "-i", pal,
-    "-lavfi", `${filters}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3`, raw]);
-  sh("gifsicle", ["-O3", "--lossy=60", raw, "-o", out]);
+    "-lavfi", `${filters}[x];[x][1:v]paletteuse=dither=none`, raw]);
+  sh("gifsicle", ["-O3", "--lossy=20", raw, "-o", out]);
   rmSync(dir, { recursive: true, force: true });
   console.log(`  ${name}.gif`);
 }
