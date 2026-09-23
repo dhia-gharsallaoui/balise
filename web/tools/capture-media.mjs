@@ -282,7 +282,16 @@ async function main() {
   await gif(browser, session, { name: "tour", go: async (p, rec) => {
     await rec.navigate(`${BASE}/knowledge`);
     await ready(p); await pause(p, 1200);
-    await rec.type(p.getByPlaceholder("Search claims…"), "failover", "Search claims for failover");
+    // A question, not a keyword: this phrasing shares no words with the claim it surfaces
+    // ("Okta SSO nested group claim mapping drops nested groups"), so it only works through
+    // the semantic path. A keyword demo would have worked before embeddings existed and
+    // shown nothing new.
+    //
+    // "charged twice" also lands its Stripe claim at #1, but reports coverage: low on the
+    // 95-claim demo vault — the similarity floor was calibrated against the 611-claim real
+    // vault and does not transfer down. Capturing that would show the honesty banner
+    // contradicting a correct top hit.
+    await rec.type(p.getByPlaceholder("Search claims…"), "cannot log in after group change", "Ask a question in plain words");
     await pause(p, 1800);
     await rec.click(p.locator(".page-open").first(), "Open the matching page");
     await p.locator(".kn-reader").waitFor(); await pause(p, 2400);

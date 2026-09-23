@@ -25,6 +25,8 @@
 SHELL := /bin/sh
 
 VAULT     ?= /tmp/balise-live
+# Set to a model name to enable semantic search; empty means lexical-only, no downloads.
+EMBED_MODEL ?= $(BALISE_EMBED_MODEL)
 DSN       ?= postgresql://balise:balise@localhost:5432/balise
 DEFAULTS  ?= defaults
 API_ADDR  ?= 127.0.0.1:8099
@@ -100,7 +102,11 @@ check-password:
 demo: build check-db
 	@go run ./cmd/demo-vault -vault "$(DEMO_VAULT)" -defaults "$(DEMO_DEFAULTS)"
 	@psql "$(DSN)" -c "create schema if not exists demo_vault" >/dev/null
-	@./bin/balise reindex "$(DEMO_VAULT)" --dsn "$(DEMO_DSN)" --defaults "$(DEMO_DEFAULTS)"
+	@# Embeds too when BALISE_EMBED_MODEL is set. Without this the demo indexes
+	@# lexically only, and semantic search silently has nothing to search -- the
+	@# symptom is a demo that answers keyword queries and reports "holds little about
+	@# this" for the plain-language ones semantic search exists to handle.
+	@BALISE_EMBED_MODEL="$(EMBED_MODEL)" ./bin/balise reindex "$(DEMO_VAULT)" --dsn "$(DEMO_DSN)" --defaults "$(DEMO_DEFAULTS)"
 	@echo
 	@echo "Demo vault ready: $(DEMO_VAULT) (defaults: $(DEMO_DEFAULTS), schema: demo_vault)"
 	@echo "Start it:"
