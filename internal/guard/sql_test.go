@@ -44,7 +44,7 @@ import (
 // defence against a maintainer of this package who is deliberately trying to circumvent them.
 // A green TestGuardsCatchKnownBypasses run is not proof of the latter.
 
-var derivedTables = []string{"documents", "claims", "chunks", "edges", "lint_findings"}
+var derivedTables = []string{"documents", "claims", "chunks", "edges", "lint_findings", "claim_embeddings"}
 
 // sqlVerbRe matches a SQL verb followed by any whitespace — not just a literal space — so a
 // query broken across lines ("select\n  uid, ...") is still recognised as SQL.

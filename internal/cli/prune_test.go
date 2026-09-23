@@ -53,7 +53,7 @@ func TestReindexPrunesAPageThatLeftTheVault(t *testing.T) {
 	pages, q := newVault(t)
 	ctx := context.Background()
 
-	report, err := cli.Reindex(ctx, q, pages, "../../defaults")
+	report, err := cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 	require.Equal(t, 2, report.Pages)
 	require.Zero(t, report.Pruned)
@@ -62,7 +62,7 @@ func TestReindexPrunesAPageThatLeftTheVault(t *testing.T) {
 		"Dhia <d@x>", "retire beta")
 	require.NoError(t, err)
 
-	report, err = cli.Reindex(ctx, q, pages, "../../defaults")
+	report, err = cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, report.Pruned)
 	require.Equal(t, map[string]string{"alpha": "work"}, slugScopes(t, q))
@@ -74,7 +74,7 @@ func TestReindexPrunesAPageThatLeftTheVault(t *testing.T) {
 func TestReindexAfterAScopeCorrectionLeavesOneCopy(t *testing.T) {
 	pages, q := newVault(t)
 	ctx := context.Background()
-	_, err := cli.Reindex(ctx, q, pages, "../../defaults")
+	_, err := cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 
 	_, err = pages.Commit([]store.Change{
@@ -83,7 +83,7 @@ func TestReindexAfterAScopeCorrectionLeavesOneCopy(t *testing.T) {
 	}, "Dhia <d@x>", "beta belongs to client-globex")
 	require.NoError(t, err)
 
-	_, err = cli.Reindex(ctx, q, pages, "../../defaults")
+	_, err = cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{"alpha": "work", "beta": "client-globex"}, slugScopes(t, q))
 }
@@ -95,7 +95,7 @@ func TestReindexAfterAScopeCorrectionLeavesOneCopy(t *testing.T) {
 func TestReindexPrunesAMovedPageThatWasGivenANewIdentity(t *testing.T) {
 	pages, q := newVault(t)
 	ctx := context.Background()
-	_, err := cli.Reindex(ctx, q, pages, "../../defaults")
+	_, err := cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 
 	_, err = pages.Commit([]store.Change{
@@ -104,7 +104,7 @@ func TestReindexPrunesAMovedPageThatWasGivenANewIdentity(t *testing.T) {
 	}, "Dhia <d@x>", "beta re-minted under client-globex")
 	require.NoError(t, err)
 
-	report, err := cli.Reindex(ctx, q, pages, "../../defaults")
+	report, err := cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, report.Pruned)
 	require.Equal(t, map[string]string{"alpha": "work", "beta": "client-globex"}, slugScopes(t, q))
@@ -126,7 +126,7 @@ func TestReindexIsNoopForABodyIdenticalPageInAnotherScope(t *testing.T) {
 
 	q := store.NewQueries(testutil.NewDB(t), store.Scopes{"work", "client-globex"})
 	ctx := context.Background()
-	report, err := cli.Reindex(ctx, q, pages, "../../defaults")
+	report, err := cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 	require.Equal(t, 2, report.Changed, "both pages must actually be indexed")
 
@@ -134,7 +134,7 @@ func TestReindexIsNoopForABodyIdenticalPageInAnotherScope(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 2)
 
-	second, err := cli.Reindex(ctx, q, pages, "../../defaults")
+	second, err := cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 	require.Zero(t, second.Changed, "and re-indexing them unchanged must still be a no-op")
 	require.Zero(t, second.Pruned)

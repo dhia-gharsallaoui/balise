@@ -12,9 +12,10 @@ import (
 
 // SearchInput is search's argument shape, per 04 section 12's abbreviated
 // schema. Type/tags/status/as_of/include_raw filters described there are not
-// implemented by store.Queries.SearchClaims (which takes only a query
-// string, an include-historical flag, and a limit), so they are omitted
-// here rather than accepted-and-ignored.
+// implemented by store.Queries.SearchClaims (which takes a query string, an
+// include-historical flag, a limit, and an optional semantic query -- see
+// deps.semanticQuery), so they are omitted here rather than
+// accepted-and-ignored.
 type SearchInput struct {
 	Query string `json:"query"`
 	// Scope narrows the search to a single scope. It must already be one
@@ -87,7 +88,7 @@ func (d *deps) search(ctx context.Context, req *sdk.CallToolRequest, in SearchIn
 	// enforce that nothing else touches the derived tables. NewQueries
 	// is the sole constructor.
 	q := store.NewQueries(d.pool, store.Scopes(scopes))
-	hits, err := q.SearchClaims(ctx, in.Query, in.IncludeHistorical, topK)
+	hits, err := q.SearchClaims(ctx, in.Query, in.IncludeHistorical, topK, d.semanticQuery(ctx, in.Query))
 	if err != nil {
 		recordAudit(ctx, d.pool, tok.ID, "search", scopes, in.Query, nil, 0, start)
 		return nil, out, fmt.Errorf("search: %w", err)
@@ -116,4 +117,22 @@ func (d *deps) search(ctx context.Context, req *sdk.CallToolRequest, in SearchIn
 
 	recordAudit(ctx, d.pool, tok.ID, "search", scopes, in.Query, uids, tokensOut, start)
 	return nil, out, nil
+}
+
+// semanticQuery embeds query through d.embedder, when one is configured,
+// into the *store.SemanticQuery SearchClaims's third retrieval arm needs.
+// Shared by search and context (context.go). It returns nil -- disabling
+// that arm for this one call, never for the whole server -- both when no
+// embedder is configured at all and when embedding this particular query
+// text fails for any reason: a transient embedding failure must degrade to
+// lexical-only search, not fail the tool call.
+func (d *deps) semanticQuery(ctx context.Context, query string) *store.SemanticQuery {
+	if d.embedder == nil {
+		return nil
+	}
+	vectors, err := d.embedder.Embed(ctx, []string{query})
+	if err != nil || len(vectors) != 1 {
+		return nil
+	}
+	return &store.SemanticQuery{Model: d.embedder.Model(), Vector: vectors[0]}
 }

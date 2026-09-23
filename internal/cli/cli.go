@@ -9,6 +9,7 @@ import (
 
 	"path/filepath"
 
+	"github.com/dhia/balise/internal/embed"
 	"github.com/dhia/balise/internal/indexer"
 	"github.com/dhia/balise/internal/registry"
 	"github.com/dhia/balise/internal/store"
@@ -33,6 +34,12 @@ type ReindexReport struct {
 	LinksMissing    int
 	AliasCollisions int
 	Findings        int
+	// Embedded is how many distinct claim texts were newly embedded this run -- a claim
+	// whose (hash, model) pair was already cached (unchanged text, unchanged model) is not
+	// counted here, so a reindex of an already-embedded, unchanged vault reports 0, matching
+	// Changed's own "0 changed" behaviour on a noop run. Always 0 when embedder is nil (no
+	// model configured), never an error in that case -- see EmbedClaims.
+	Embedded int
 }
 
 // WithinScopeRecovery is resolved / (resolved + missing): dangling refs whose target
@@ -69,8 +76,14 @@ func (r ReindexReport) ReferentialIntegrity() float64 {
 // index. The two passes are why a page can link to one indexed after it.
 // defaultsDir is explicit because `go test` runs each package with its own directory as CWD,
 // so a repo-relative literal would resolve to internal/cli/defaults and fail.
+// embedder is nil-safe: a caller with no configured model (embed.TryLoad's default,
+// no-network "not configured" case) passes nil and Reindex behaves exactly as it did before
+// this parameter existed, reporting Embedded: 0 -- semantic search staying an additive,
+// optional signal never means a plain `balise reindex` can fail or slow down because a
+// model happens to be unavailable.
 func Reindex(
 	ctx context.Context, q *store.Queries, pages store.PageStore, defaultsDir string,
+	embedder *embed.Embedder,
 ) (ReindexReport, error) {
 	reg, err := registry.Load(filepath.Join(defaultsDir, "types"))
 	if err != nil {
@@ -190,6 +203,12 @@ func Reindex(
 		return ReindexReport{}, fmt.Errorf("prune stale documents: %w", err)
 	}
 	report.Pruned = pruned
+
+	embedded, err := EmbedClaims(ctx, q, embedder)
+	if err != nil {
+		return ReindexReport{}, fmt.Errorf("embed claims: %w", err)
+	}
+	report.Embedded = embedded
 
 	return report, nil
 }

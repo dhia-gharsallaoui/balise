@@ -442,7 +442,7 @@ func (s *server) reindexAfterAccept(ctx context.Context) (stale bool) {
 	if s.defaultsDir == "" {
 		return true
 	}
-	if _, err := cli.Reindex(ctx, s.q(), s.pages, s.defaultsDir); err != nil {
+	if _, err := cli.Reindex(ctx, s.q(), s.pages, s.defaultsDir, nil); err != nil {
 		slog.Error("reindex after accept failed", "error", err)
 		return true
 	}

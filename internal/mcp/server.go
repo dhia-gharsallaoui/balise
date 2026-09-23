@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/dhia/balise/internal/embed"
 	"github.com/dhia/balise/internal/ratelimit"
 	"github.com/dhia/balise/internal/registry"
 	"github.com/dhia/balise/internal/store"
@@ -22,6 +23,13 @@ type deps struct {
 	// consumer in this repo uses -- never a second, hardcoded copy of the
 	// agent_order list.
 	order *registry.Order
+	// embedder is nil unless cmd/balise/main.go loaded one via
+	// embed.TryLoad (i.e. unless BALISE_EMBED_MODEL was set). search.go and
+	// context.go both embed the caller's query text through it, when
+	// non-nil, to add a semantic ranking arm to SearchClaims's RRF fusion;
+	// a nil embedder means both tools stay exactly as lexical-only as they
+	// always were, with no error and no behaviour change.
+	embedder *embed.Embedder
 }
 
 // newMCPServer builds the *sdk.Server shared by both transports this
@@ -29,8 +37,8 @@ type deps struct {
 // stdio session (stdio.go). Every tool and prompt is registered exactly
 // once, here, so the two transports can never drift out of sync with each
 // other.
-func newMCPServer(pool *pgxpool.Pool, pages store.PageStore, order *registry.Order) *sdk.Server {
-	d := &deps{pool: pool, pages: pages, order: order}
+func newMCPServer(pool *pgxpool.Pool, pages store.PageStore, order *registry.Order, embedder *embed.Embedder) *sdk.Server {
+	d := &deps{pool: pool, pages: pages, order: order, embedder: embedder}
 
 	server := sdk.NewServer(&sdk.Implementation{
 		Name:    "balise",
@@ -76,10 +84,10 @@ func newMCPServer(pool *pgxpool.Pool, pages store.PageStore, order *registry.Ord
 		Description: "Assemble a token-budgeted context pack for a query: search hits plus " +
 			"their specializes/supersedes relations, ordered by page type and packed to " +
 			"budget_tokens (default 6000) using each page's real stored token count -- never " +
-			"truncated mid-page. Ranking is lexical only (the same tsvector/pg_trgm search " +
-			"the search tool uses): this deployment has no embedding index, so nothing here " +
-			"is semantic relevance, and coverage is reported \"low\" whenever nothing was " +
-			"packed. Requires the read capability.",
+			"truncated mid-page. Ranking fuses lexical/trigram search with an optional " +
+			"semantic (embedding) signal when a model is configured on this deployment; " +
+			"without one, ranking is lexical only. Coverage is reported \"low\" whenever " +
+			"nothing was packed. Requires the read capability.",
 	}, d.context)
 
 	server.AddPrompt(contextFirstPrompt, contextFirstPromptHandler)
@@ -106,8 +114,11 @@ func newMCPServer(pool *pgxpool.Pool, pages store.PageStore, order *registry.Ord
 // in-process only (internal/ratelimit) -- there is no cross-process shared
 // counter -- which is the accepted limitation for this single-process
 // deployment, stated here and in the completion report.
-func NewHandler(pool *pgxpool.Pool, pages store.PageStore, order *registry.Order, ratePerMinute int) http.Handler {
-	server := newMCPServer(pool, pages, order)
+func NewHandler(
+	pool *pgxpool.Pool, pages store.PageStore, order *registry.Order, ratePerMinute int,
+	embedder *embed.Embedder,
+) http.Handler {
+	server := newMCPServer(pool, pages, order, embedder)
 
 	mcpHandler := sdk.NewStreamableHTTPHandler(
 		func(*http.Request) *sdk.Server { return server },

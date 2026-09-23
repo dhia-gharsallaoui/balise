@@ -12,6 +12,7 @@ import (
 	"github.com/dhia/balise/internal/api"
 	"github.com/dhia/balise/internal/cli"
 	"github.com/dhia/balise/internal/compile"
+	"github.com/dhia/balise/internal/embed"
 	"github.com/dhia/balise/internal/importer"
 	"github.com/dhia/balise/internal/mcp"
 	"github.com/dhia/balise/internal/registry"
@@ -23,6 +24,23 @@ import (
 const defaultExtractClaimsModel = "claude-sonnet-5"
 
 const defaultDSN = "postgresql://balise:balise@localhost:5432/balise"
+
+// loadEmbedder attempts to load the optional semantic-search embedder configured via
+// embed.ModelEnv (BALISE_EMBED_MODEL). Unset, embed.TryLoad returns (nil, nil) immediately --
+// the expected, silent, no-network default -- and this returns nil with no message. Set but
+// failing to load (bad model reference, offline, corrupt cache) is reported to stderr as a
+// one-line, non-fatal diagnostic, and nil is still returned: semantic search must never be
+// the reason `balise serve`, `balise mcp --stdio`, or `balise reindex` fails to start or run
+// -- a missing or broken model degrades every caller to lexical-only search, silently to
+// callers, but visibly (once, here) to whoever is running the process.
+func loadEmbedder(cmd *cobra.Command) *embed.Embedder {
+	embedder, err := embed.TryLoad()
+	if err != nil {
+		cmd.PrintErrf("semantic search disabled: %v\n", err)
+		return nil
+	}
+	return embedder
+}
 
 func main() {
 	if err := root().Execute(); err != nil {
@@ -253,12 +271,15 @@ func reindexCmd(dsn *string) *cobra.Command {
 			}
 			defer pool.Close()
 
-			report, err := cli.Reindex(ctx, q, pages, defaultsDir)
+			embedder := loadEmbedder(cmd)
+			defer embedder.Close()
+
+			report, err := cli.Reindex(ctx, q, pages, defaultsDir, embedder)
 			if err != nil {
 				return err
 			}
-			cmd.Printf("indexed %d pages (%d changed, %d pruned), %d findings, %d collisions\n",
-				report.Pages, report.Changed, report.Pruned, report.Findings, report.AliasCollisions)
+			cmd.Printf("indexed %d pages (%d changed, %d pruned), %d findings, %d collisions, %d embedded\n",
+				report.Pages, report.Changed, report.Pruned, report.Findings, report.AliasCollisions, report.Embedded)
 
 			// Link health is read back from storage (cli.ComputeLinkHealth), not from this
 			// run's own report.Links*: an incremental reindex only computes findings for the
@@ -349,6 +370,9 @@ func serveCmd(dsn *string) *cobra.Command {
 				return err
 			}
 
+			embedder := loadEmbedder(cmd)
+			defer embedder.Close()
+
 			// The MCP server is mounted at /mcp alongside the REST API, inside one outer
 			// mux — api.New's own returned handler registers only /api/... routes, with
 			// no catch-all, so this needs no change inside internal/api. Each MCP tool
@@ -363,8 +387,8 @@ func serveCmd(dsn *string) *cobra.Command {
 			// intent, and now serve actually delivers that.
 			outer := http.NewServeMux()
 			outer.Handle("/", api.New(q, pages, spaces, order, defaultsDir,
-				api.WithOwnerPassword(password), api.WithTokenPool(pool)))
-			outer.Handle("/mcp", mcp.NewHandler(pool, pages, order, mcpRateLimit))
+				api.WithOwnerPassword(password), api.WithTokenPool(pool), api.WithEmbedder(embedder)))
+			outer.Handle("/mcp", mcp.NewHandler(pool, pages, order, mcpRateLimit, embedder))
 
 			cmd.Printf("listening on http://%s (API at /api, MCP at /mcp)\n", addr)
 			return http.ListenAndServe(addr, outer)
@@ -473,7 +497,10 @@ func mcpCmd(dsn *string) *cobra.Command {
 				return err
 			}
 
-			return mcp.RunStdio(ctx, pool, pages, order, token)
+			embedder := loadEmbedder(cmd)
+			defer embedder.Close()
+
+			return mcp.RunStdio(ctx, pool, pages, order, token, embedder)
 		},
 	}
 	cmd.Flags().BoolVar(&stdio, "stdio", false, "run a stdio MCP session for a local, single-user client")

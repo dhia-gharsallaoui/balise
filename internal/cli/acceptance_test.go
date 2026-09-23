@@ -92,14 +92,14 @@ func TestCriterion1ImportProducesACommittedVaultWithUIDs(t *testing.T) {
 func TestCriterion2ReindexCompletesUnderTwoMinutes(t *testing.T) {
 	pages, q := importedVault(t)
 	started := time.Now()
-	_, err := cli.Reindex(context.Background(), q, pages, "../../defaults")
+	_, err := cli.Reindex(context.Background(), q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 	require.Less(t, time.Since(started), 2*time.Minute)
 }
 
 func TestCriterion3LinkRecoveryIsAtLeast95Percent(t *testing.T) {
 	pages, q := importedVault(t)
-	report, err := cli.Reindex(context.Background(), q, pages, "../../defaults")
+	report, err := cli.Reindex(context.Background(), q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 	// The criterion excludes cross-scope dangling refs: a target that exists in another
 	// scope is blocked by the scope-isolation security boundary by design, not a
@@ -115,7 +115,7 @@ func TestCriterion3LinkRecoveryIsAtLeast95Percent(t *testing.T) {
 func TestCriterion4DropAndReindexReproducesTheDatabase(t *testing.T) {
 	pages, q := importedVault(t)
 	ctx := context.Background()
-	_, err := cli.Reindex(ctx, q, pages, "../../defaults")
+	_, err := cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 
 	before, err := q.ListPages(ctx, store.PageFilter{IncludeHistorical: true})
@@ -124,7 +124,7 @@ func TestCriterion4DropAndReindexReproducesTheDatabase(t *testing.T) {
 	tenants, err := registry.LoadTenants("../../defaults/tenants.yaml")
 	require.NoError(t, err)
 	fresh := store.NewQueries(testutil.NewDB(t), acceptanceScopes(t, tenants))
-	_, err = cli.Reindex(ctx, fresh, pages, "../../defaults")
+	_, err = cli.Reindex(ctx, fresh, pages, "../../defaults", nil)
 	require.NoError(t, err)
 
 	after, err := fresh.ListPages(ctx, store.PageFilter{IncludeHistorical: true})
@@ -140,10 +140,10 @@ func TestCriterion4DropAndReindexReproducesTheDatabase(t *testing.T) {
 func TestCriterion7SearchReturnsClaimLevelHits(t *testing.T) {
 	pages, q := importedVault(t)
 	ctx := context.Background()
-	_, err := cli.Reindex(ctx, q, pages, "../../defaults")
+	_, err := cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 
-	hits, err := q.SearchClaims(ctx, "gateway", false, 10)
+	hits, err := q.SearchClaims(ctx, "gateway", false, 10, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, hits)
 	require.NotEmpty(t, hits[0].MatchedClaims)
@@ -152,10 +152,10 @@ func TestCriterion7SearchReturnsClaimLevelHits(t *testing.T) {
 func TestReindexIsIdempotent(t *testing.T) {
 	pages, q := importedVault(t)
 	ctx := context.Background()
-	_, err := cli.Reindex(ctx, q, pages, "../../defaults")
+	_, err := cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 
-	second, err := cli.Reindex(ctx, q, pages, "../../defaults")
+	second, err := cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 	require.Zero(t, second.Changed, "re-indexing unchanged files must be a no-op")
 }

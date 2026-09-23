@@ -21,7 +21,7 @@ func TestComputeLinkHealthSurvivesAnIncrementalRun(t *testing.T) {
 	pages, q := importedVault(t)
 	ctx := context.Background()
 
-	first, err := cli.Reindex(ctx, q, pages, "../../defaults")
+	first, err := cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 	require.Positive(t, first.LinksTotal, "a freshly reindexed real corpus must have some links")
 
@@ -32,7 +32,7 @@ func TestComputeLinkHealthSurvivesAnIncrementalRun(t *testing.T) {
 	require.Equal(t, first.LinksCrossScope, healthAfterFull.CrossScope)
 	require.Equal(t, first.LinksMissing, healthAfterFull.Missing)
 
-	second, err := cli.Reindex(ctx, q, pages, "../../defaults")
+	second, err := cli.Reindex(ctx, q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 	require.Zero(t, second.Changed, "re-indexing unchanged files must be a no-op")
 	// This is the precondition the bug depended on: an incremental run's own in-memory

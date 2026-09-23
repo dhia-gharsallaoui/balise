@@ -27,7 +27,7 @@ func TestRateLimiterRefusalSurfacesAs429OverRealHTTP(t *testing.T) {
 
 	// ratePerMinute: 1 -- the smallest limit that still lets the test distinguish
 	// "allowed" from "refused" in exactly two requests.
-	handler := NewHandler(d.pool, d.pages, d.order, 1)
+	handler := NewHandler(d.pool, d.pages, d.order, 1, nil)
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 

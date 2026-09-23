@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/dhia/balise/internal/embed"
 	"github.com/dhia/balise/internal/registry"
 	"github.com/dhia/balise/internal/store"
 )
@@ -70,6 +71,12 @@ type server struct {
 	// package constructs New with no options and so gets a nil auth — fully open, no
 	// behavior change from before this file existed.
 	auth *ownerAuth
+
+	// embedder is nil unless WithEmbedder configured one (i.e. unless BALISE_EMBED_MODEL was
+	// set when cmd/balise/main.go called embed.TryLoad). handleSearch embeds the query text
+	// through it, when non-nil, to add a semantic arm to SearchClaims's RRF fusion; a nil
+	// embedder means /api/search stays exactly as lexical-only as it always was.
+	embedder *embed.Embedder
 }
 
 // Option configures New beyond its required arguments, without changing the signature every
@@ -97,6 +104,14 @@ func WithOwnerPassword(password string) Option {
 		}
 		s.auth = newOwnerAuth(password)
 	}
+}
+
+// WithEmbedder supplies the optional embedder handleSearch uses to add a semantic ranking
+// arm to search. A nil embedder (the zero value if this option is never applied at all) is
+// the expected, silent default: search stays lexical-only, with no error and no behavior
+// change from before this option existed.
+func WithEmbedder(embedder *embed.Embedder) Option {
+	return func(s *server) { s.embedder = embedder }
 }
 
 // defaultTokenDSN mirrors cmd/balise/main.go's own defaultDSN literal. It is duplicated

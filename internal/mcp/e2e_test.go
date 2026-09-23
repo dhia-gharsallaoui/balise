@@ -46,7 +46,7 @@ func TestEndToEndOverRealHTTPAndMCPClient(t *testing.T) {
 	// ratePerMinute: 0 exercises NewHandler's own default-fallback path
 	// (RateLimiter's default of 60/min), which comfortably covers this
 	// test's two sequential calls without tripping the limiter.
-	handler := NewHandler(d.pool, d.pages, d.order, 0)
+	handler := NewHandler(d.pool, d.pages, d.order, 0, nil)
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 

@@ -50,7 +50,7 @@ Body text for the fixture page.
 	// silently dropped by scope enforcement first — that would hide the very bug this test
 	// exists to catch.
 	q := store.NewQueries(testutil.NewDB(t), store.Scopes{"work", "review"})
-	report, err := cli.Reindex(context.Background(), q, pages, "../../defaults")
+	report, err := cli.Reindex(context.Background(), q, pages, "../../defaults", nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, report.Pages, "the proposal must not be counted as a walked page")
 

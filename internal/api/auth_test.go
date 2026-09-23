@@ -57,7 +57,7 @@ func newComboServer(t *testing.T, password string) (*httptest.Server, *pgxpool.P
 
 	outer := http.NewServeMux()
 	outer.Handle("/", api.New(q, pages, spaces, order, "", api.WithOwnerPassword(password)))
-	outer.Handle("/mcp", mcp.NewHandler(pool, pages, order, 0))
+	outer.Handle("/mcp", mcp.NewHandler(pool, pages, order, 0, nil))
 	server := httptest.NewServer(outer)
 	t.Cleanup(server.Close)
 	return server, pool

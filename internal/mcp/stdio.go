@@ -9,6 +9,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/dhia/balise/internal/embed"
 	"github.com/dhia/balise/internal/registry"
 	"github.com/dhia/balise/internal/store"
 )
@@ -56,12 +57,15 @@ import (
 // framing for this mode -- but an environment variable is the safer way to
 // pass the same value, and is what cmd/balise's mcp subcommand supports
 // alongside the flag.
-func RunStdio(ctx context.Context, pool *pgxpool.Pool, pages store.PageStore, order *registry.Order, rawToken string) error {
+func RunStdio(
+	ctx context.Context, pool *pgxpool.Pool, pages store.PageStore, order *registry.Order,
+	rawToken string, embedder *embed.Embedder,
+) error {
 	if _, err := lookupLiveToken(ctx, pool, rawToken); err != nil {
 		return fmt.Errorf("mcp stdio: invalid token: %w", err)
 	}
 
-	server := newMCPServer(pool, pages, order)
+	server := newMCPServer(pool, pages, order, embedder)
 	server.AddReceivingMiddleware(stdioAuthMiddleware(rawToken))
 
 	return server.Run(ctx, &sdk.StdioTransport{})

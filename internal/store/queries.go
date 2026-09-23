@@ -11,11 +11,13 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/dhia/balise/internal/embed"
 	"github.com/dhia/balise/internal/vault"
 )
 
@@ -500,8 +502,88 @@ func (q *Queries) GetPage(ctx context.Context, scope, slug string) (*PageRow, er
 	return &found[0], nil
 }
 
-// SearchClaims fuses a lexical claim search with a trigram title search using RRF.
-func (q *Queries) SearchClaims(ctx context.Context, query string, includeHistorical bool, limit int) ([]Hit, error) {
+// SemanticQuery is an optional third input to SearchClaims: a query vector, under a named
+// embedding model, to rank claims by cosine similarity alongside the existing lexical and
+// trigram signals. A nil SemanticQuery disables the semantic arm entirely and SearchClaims
+// behaves exactly as it did before this arm existed -- the behaviour every call site gets
+// automatically when no embedding model is configured (internal/embed.TryLoad returning a
+// nil *embed.Embedder), so search keeps working, lexical-only, with no special-casing
+// needed at the call site.
+type SemanticQuery struct {
+	Model  string
+	Vector []float32
+}
+
+// claimRRFRow is one per-claim ranked row from a single retrieval arm (lexical, trigram, or
+// semantic), before fusion across arms. why identifies which arm produced it; rrf is that
+// arm's own reciprocal-rank score (1/(60+rank), rank being 1-based within the arm).
+type claimRRFRow struct {
+	docUID string
+	claim  string
+	why    string
+	rrf    float64
+}
+
+// rankedDoc is one document after fusing every claimRRFRow that named it, immediately
+// before the final documentMetaByUID lookup fills in its displayable fields.
+type rankedDoc struct {
+	docUID string
+	why    string
+	score  float64
+	claims []string
+}
+
+// SearchClaims fuses a lexical claim search and a trigram title search -- and, when sem is
+// non-nil, a semantic claim search -- using RRF (k=60).
+func (q *Queries) SearchClaims(ctx context.Context, query string, includeHistorical bool, limit int, sem *SemanticQuery) ([]Hit, error) {
+	rows, err := q.lexTrigramRows(ctx, query, includeHistorical)
+	if err != nil {
+		return nil, err
+	}
+	if sem != nil {
+		semRows, err := q.semanticRows(ctx, sem, includeHistorical)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, semRows...)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+
+	ranked := fuseRRF(rows, limit)
+	uids := make([]string, len(ranked))
+	for i, r := range ranked {
+		uids[i] = r.docUID
+	}
+	meta, err := q.documentMetaByUID(ctx, uids)
+	if err != nil {
+		return nil, err
+	}
+
+	hits := make([]Hit, 0, len(ranked))
+	for _, r := range ranked {
+		m, ok := meta[r.docUID]
+		if !ok {
+			// Scope re-check found this doc_uid no longer (or never) in the allowed
+			// scopes -- defence in depth, since every arm above already applied its own
+			// scope filter. Silently dropping it, not erroring, matches every other
+			// scope-blind read in this file (GetPage, GetPagesByUIDs, ...).
+			continue
+		}
+		hits = append(hits, Hit{
+			Slug: m.slug, Title: m.title, Type: m.docType, Status: m.status, Scope: m.scope,
+			MatchedClaims: r.claims, Why: r.why, Score: r.score,
+		})
+	}
+	return hits, nil
+}
+
+// lexTrigramRows is 04's original two-signal RRF search (websearch tsquery over claims,
+// pg_trgm similarity over titles), returned as flat per-claim rows rather than already
+// joined and grouped by document -- splitting the grouping step out (into fuseRRF) is what
+// lets semanticRows contribute a third ranked list without duplicating this SQL.
+func (q *Queries) lexTrigramRows(ctx context.Context, query string, includeHistorical bool) ([]claimRRFRow, error) {
 	rows, err := q.pool.Query(ctx, `
 		with lex as (
 		  select c.doc_uid, c.text as claim, 'lexical' as why,
@@ -516,34 +598,263 @@ func (q *Queries) SearchClaims(ctx context.Context, query string, includeHistori
 		  from documents d
 		  where d.scope = any($2::text[]) and ($3 or not d.historical)
 		    and similarity(d.title, $1) > 0.25
-		),
-		fused as (
-		  select doc_uid, claim, why,
-		         1.0 / (60 + rank() over (partition by why order by score desc)) as rrf
-		  from (select * from lex union all select * from trg) u
 		)
-		select d.slug, d.title, d.type, coalesce(d.status,''), d.scope,
-		       array_agg(distinct f.claim), min(f.why), sum(f.rrf) as score
-		from fused f join documents d on d.uid = f.doc_uid
-		group by d.slug, d.title, d.type, d.status, d.scope
-		order by score desc
-		limit $4`,
-		query, []string(q.scopes), includeHistorical, limit)
+		select doc_uid, claim, why,
+		       1.0 / (60 + rank() over (partition by why order by score desc)) as rrf
+		from (select * from lex union all select * from trg) u`,
+		query, []string(q.scopes), includeHistorical)
 	if err != nil {
 		return nil, fmt.Errorf("search %q: %w", query, err)
 	}
 	defer rows.Close()
 
-	var hits []Hit
+	var out []claimRRFRow
 	for rows.Next() {
-		var hit Hit
-		if err := rows.Scan(&hit.Slug, &hit.Title, &hit.Type, &hit.Status, &hit.Scope,
-			&hit.MatchedClaims, &hit.Why, &hit.Score); err != nil {
-			return nil, fmt.Errorf("scan hit: %w", err)
+		var row claimRRFRow
+		if err := rows.Scan(&row.docUID, &row.claim, &row.why, &row.rrf); err != nil {
+			return nil, fmt.Errorf("scan claim row: %w", err)
 		}
-		hits = append(hits, hit)
+		out = append(out, row)
 	}
-	return hits, rows.Err()
+	return out, rows.Err()
+}
+
+// semanticRows scores every scoped, already-embedded claim by cosine similarity against
+// sem.Vector and returns the ranking as RRF rows with why="semantic". This is the one arm
+// of SearchClaims that runs almost entirely in Go rather than SQL: at this vault's scale
+// (~1,100 vectors), brute-force cosine over every candidate is sub-millisecond and exact,
+// so there is no approximate index (pgvector+HNSW, per 04 section 21) to build or
+// maintain -- and pgvector is not installed in this environment regardless.
+//
+// Only claims with a cached vector under sem.Model participate. A claim that has not yet
+// been embedded (added since the last reindex's embedding pass, or simply because no
+// embedder is configured at all) is absent from this arm, never an error -- the same
+// graceful-degradation contract one layer down from "no embedder configured skips the arm
+// entirely", extended to "a specific claim not yet embedded skips just that claim".
+//
+// Scope is enforced here by construction, not by an extra filter: ScopedClaimTexts already
+// restricts its candidates to q.scopes, so a claim from a scope this Queries does not hold
+// is never even a candidate to look up a vector for, let alone score and return.
+func (q *Queries) semanticRows(ctx context.Context, sem *SemanticQuery, includeHistorical bool) ([]claimRRFRow, error) {
+	candidates, err := q.ScopedClaimTexts(ctx, includeHistorical)
+	if err != nil {
+		return nil, fmt.Errorf("semantic search: %w", err)
+	}
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+
+	hashes := make([]string, len(candidates))
+	for i, c := range candidates {
+		hashes[i] = embed.Hash(c.Claim)
+	}
+	cached, err := q.CachedClaimEmbeddings(ctx, sem.Model, hashes)
+	if err != nil {
+		return nil, fmt.Errorf("semantic search: %w", err)
+	}
+	if len(cached) == 0 {
+		return nil, nil
+	}
+
+	type scored struct {
+		docUID, claim string
+		score         float64
+	}
+	results := make([]scored, 0, len(cached))
+	for i, c := range candidates {
+		raw, ok := cached[hashes[i]]
+		if !ok {
+			continue
+		}
+		vec, err := embed.DecodeVector(raw)
+		if err != nil {
+			return nil, fmt.Errorf("semantic search: decode vector for %s: %w", c.DocUID, err)
+		}
+		results = append(results, scored{c.DocUID, c.Claim, embed.Cosine(sem.Vector, vec)})
+	}
+	sort.Slice(results, func(i, j int) bool { return results[i].score > results[j].score })
+
+	out := make([]claimRRFRow, len(results))
+	for rank, r := range results {
+		out[rank] = claimRRFRow{
+			docUID: r.docUID, claim: r.claim, why: "semantic",
+			rrf: 1.0 / float64(60+rank+1),
+		}
+	}
+	return out, nil
+}
+
+// fuseRRF sums each document's RRF score across every arm that produced a row for it
+// (lexical, trigram, semantic — regardless of how many arms fired for that document), and
+// picks one Why per document by fixed precedence: lexical, then trigram, then semantic. A
+// claim matched on exact identifier text ("DCGM_FI_", "/etc/alloy", "erconn-003-01") or a
+// near-exact title match is always reported under its own, more precise reason, even when
+// the same document also happens to score on semantic similarity -- semantic search adds
+// recall, it never gets credit for a hit a sharper signal already explains. Results are
+// sorted by summed score, descending, then truncated to limit.
+func fuseRRF(rows []claimRRFRow, limit int) []rankedDoc {
+	whyPriority := map[string]int{"lexical": 0, "trigram": 1, "semantic": 2}
+
+	byDoc := map[string]*rankedDoc{}
+	var order []string
+	claimSeen := map[string]map[string]bool{}
+	for _, row := range rows {
+		doc, ok := byDoc[row.docUID]
+		if !ok {
+			doc = &rankedDoc{docUID: row.docUID, why: row.why}
+			byDoc[row.docUID] = doc
+			claimSeen[row.docUID] = map[string]bool{}
+			order = append(order, row.docUID)
+		}
+		doc.score += row.rrf
+		if !claimSeen[row.docUID][row.claim] {
+			claimSeen[row.docUID][row.claim] = true
+			doc.claims = append(doc.claims, row.claim)
+		}
+		if whyPriority[row.why] < whyPriority[doc.why] {
+			doc.why = row.why
+		}
+	}
+
+	docs := make([]rankedDoc, len(order))
+	for i, uid := range order {
+		docs[i] = *byDoc[uid]
+	}
+	sort.SliceStable(docs, func(i, j int) bool { return docs[i].score > docs[j].score })
+	if limit > 0 && len(docs) > limit {
+		docs = docs[:limit]
+	}
+	return docs
+}
+
+// docMeta is the small, scope-checked slice of a document's fields SearchClaims needs to
+// build a Hit, once fuseRRF has already picked the winning doc_uids.
+type docMeta struct {
+	slug, title, docType, status, scope string
+}
+
+// documentMetaByUID fetches display fields for exactly the given uids, re-applying the
+// scope filter one more time. Every uid reaching this point already passed a scope filter
+// in whichever arm produced it (lexTrigramRows's own SQL, or semanticRows via
+// ScopedClaimTexts) -- this is deliberate defence in depth, not the only check, so that a
+// bug in one arm's filter can never by itself leak a document across scopes.
+func (q *Queries) documentMetaByUID(ctx context.Context, uids []string) (map[string]docMeta, error) {
+	if len(uids) == 0 {
+		return map[string]docMeta{}, nil
+	}
+	rows, err := q.pool.Query(ctx, `
+		select uid, slug, title, type, coalesce(status,''), scope
+		from documents
+		where uid = any($1::text[]) and scope = any($2::text[])`,
+		uids, []string(q.scopes))
+	if err != nil {
+		return nil, fmt.Errorf("document meta: %w", err)
+	}
+	defer rows.Close()
+
+	out := map[string]docMeta{}
+	for rows.Next() {
+		var uid string
+		var m docMeta
+		if err := rows.Scan(&uid, &m.slug, &m.title, &m.docType, &m.status, &m.scope); err != nil {
+			return nil, fmt.Errorf("scan document meta: %w", err)
+		}
+		out[uid] = m
+	}
+	return out, rows.Err()
+}
+
+// EmbeddingCandidate is one claim eligible for embedding: its text, plus the document it
+// belongs to (needed to reconstruct a Hit once a semantic match is found).
+type EmbeddingCandidate struct {
+	DocUID string
+	Claim  string
+}
+
+// ScopedClaimTexts returns every claim's text, with its owning document, across the allowed
+// scopes. It is the single shared candidate universe for both the bulk embedding pass
+// (internal/cli's reindex step) and query-time semantic search (semanticRows) -- using the
+// same method in both places means one scope filter guards both call sites, rather than a
+// second one being written and risking drift from the first.
+func (q *Queries) ScopedClaimTexts(ctx context.Context, includeHistorical bool) ([]EmbeddingCandidate, error) {
+	rows, err := q.pool.Query(ctx, `
+		select c.doc_uid, c.text
+		from claims c join documents d on d.uid = c.doc_uid
+		where d.scope = any($1::text[]) and ($2 or not d.historical)`,
+		[]string(q.scopes), includeHistorical)
+	if err != nil {
+		return nil, fmt.Errorf("scoped claim texts: %w", err)
+	}
+	defer rows.Close()
+
+	var out []EmbeddingCandidate
+	for rows.Next() {
+		var c EmbeddingCandidate
+		if err := rows.Scan(&c.DocUID, &c.Claim); err != nil {
+			return nil, fmt.Errorf("scan scoped claim text: %w", err)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// ClaimEmbeddingWrite is one vector ready to be cached, keyed by its claim text's content
+// hash (internal/embed.Hash) -- not by claim id or doc_uid, since claim_embeddings has
+// neither column (see migrations/00007_claim_embeddings.sql).
+type ClaimEmbeddingWrite struct {
+	Hash   string
+	Vector []byte
+}
+
+// UpsertClaimEmbeddings writes newly computed vectors into the cache, keyed by (hash,
+// model). "do nothing" on conflict, not "do update": claim_embeddings is a pure
+// content-addressed cache and a given (hash, model) pair always maps to the same vector (an
+// embedding model is deterministic), so a conflict only happens when two distinct claims
+// share identical normalised text and both get embedded within the same pass -- the second
+// write is redundant, never a correction, so there is nothing to overwrite it with.
+func (q *Queries) UpsertClaimEmbeddings(ctx context.Context, model string, dim int, items []ClaimEmbeddingWrite) error {
+	if len(items) == 0 {
+		return nil
+	}
+	batch := &pgx.Batch{}
+	for _, item := range items {
+		batch.Queue(`
+			insert into claim_embeddings (hash, model, dim, vector) values ($1,$2,$3,$4)
+			on conflict (hash, model) do nothing`,
+			item.Hash, model, dim, item.Vector)
+	}
+	if err := q.pool.SendBatch(ctx, batch).Close(); err != nil {
+		return fmt.Errorf("upsert claim embeddings: %w", err)
+	}
+	return nil
+}
+
+// CachedClaimEmbeddings returns the cached vector bytes for every hash in hashes that is
+// already embedded under model, keyed by hash. A hash absent from the result was never
+// embedded, or was only ever embedded under a different model -- the caller must treat that
+// as a cache miss to re-embed later, never as an error.
+func (q *Queries) CachedClaimEmbeddings(ctx context.Context, model string, hashes []string) (map[string][]byte, error) {
+	if len(hashes) == 0 {
+		return map[string][]byte{}, nil
+	}
+	rows, err := q.pool.Query(ctx, `
+		select hash, vector from claim_embeddings where model = $1 and hash = any($2::text[])`,
+		model, hashes)
+	if err != nil {
+		return nil, fmt.Errorf("cached claim embeddings: %w", err)
+	}
+	defer rows.Close()
+
+	out := map[string][]byte{}
+	for rows.Next() {
+		var hash string
+		var vector []byte
+		if err := rows.Scan(&hash, &vector); err != nil {
+			return nil, fmt.Errorf("scan cached claim embedding: %w", err)
+		}
+		out[hash] = vector
+	}
+	return out, rows.Err()
 }
 
 // Graph returns nodes and the edges between them, all within the allowed scopes.

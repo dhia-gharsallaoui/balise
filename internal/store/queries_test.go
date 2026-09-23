@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dhia/balise/internal/embed"
 	"github.com/dhia/balise/internal/store"
 	"github.com/dhia/balise/internal/testutil"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -131,7 +132,7 @@ func TestSearchFindsAClaimAndNamesWhy(t *testing.T) {
 		{ClaimID: "c1", Ord: 0, Text: "Updating the gateway removes every connection", Status: "active"},
 	}))
 
-	hits, err := q.SearchClaims(ctx, "gateway", false, 10)
+	hits, err := q.SearchClaims(ctx, "gateway", false, 10, nil)
 	require.NoError(t, err)
 	require.Len(t, hits, 1)
 	require.Equal(t, "ergw", hits[0].Slug)
@@ -148,9 +149,71 @@ func TestSearchRespectsScope(t *testing.T) {
 		{ClaimID: "c1", Ord: 0, Text: "Updating the gateway removes every connection", Status: "active"},
 	}))
 
-	hits, err := store.NewQueries(pool, store.Scopes{"personal"}).SearchClaims(ctx, "gateway", false, 10)
+	hits, err := store.NewQueries(pool, store.Scopes{"personal"}).SearchClaims(ctx, "gateway", false, 10, nil)
 	require.NoError(t, err)
 	require.Empty(t, hits)
+}
+
+// TestSemanticSearchRespectsScope is TestSearchRespectsScope's counterpart for the new
+// vector retrieval arm -- the one place the task brief calls out as the likeliest spot for
+// a new retrieval path to quietly leak. semanticRows sources its candidates from
+// ScopedClaimTexts, which is itself scope-filtered, so a "work"-only claim's cached
+// embedding must never surface as a hit for a "personal"-scoped caller -- even when the
+// caller's semantic query vector is an exact match for it (cosine similarity 1.0, the
+// strongest possible signal, guaranteed to win RRF outright if it were visible at all). The
+// query string is deliberately something no lexical or trigram signal could ever match, so
+// any hit that did leak through could only have come from the semantic arm.
+func TestSemanticSearchRespectsScope(t *testing.T) {
+	pool := testutil.NewDB(t)
+	ctx := context.Background()
+	work := store.NewQueries(pool, store.Scopes{"work"})
+	seedDoc(t, work, nil)
+	claimText := "Updating the gateway removes every connection"
+	require.NoError(t, work.ReplaceClaims(ctx, "u1", []store.Claim{
+		{ClaimID: "c1", Ord: 0, Text: claimText, Status: "active"},
+	}))
+
+	const model = "test-model"
+	vector := []float32{1, 0, 0}
+	require.NoError(t, work.UpsertClaimEmbeddings(ctx, model, len(vector), []store.ClaimEmbeddingWrite{
+		{Hash: embed.Hash(claimText), Vector: embed.EncodeVector(vector)},
+	}))
+	sem := &store.SemanticQuery{Model: model, Vector: vector}
+
+	hits, err := store.NewQueries(pool, store.Scopes{"personal"}).SearchClaims(
+		ctx, "zzz_no_lexical_or_trigram_match_zzz", false, 10, sem,
+	)
+	require.NoError(t, err)
+	require.Empty(t, hits)
+}
+
+// TestSemanticSearchFindsMatchWithinScope is TestSemanticSearchRespectsScope's positive
+// control: the exact same seeded claim and cached embedding, queried from a Queries that
+// does hold "work", must surface as a hit with why == "semantic". Without this, an empty
+// result above would be equally consistent with the semantic arm silently doing nothing at
+// all -- this proves it is scope enforcement specifically, not a dead code path.
+func TestSemanticSearchFindsMatchWithinScope(t *testing.T) {
+	pool := testutil.NewDB(t)
+	ctx := context.Background()
+	work := store.NewQueries(pool, store.Scopes{"work"})
+	seedDoc(t, work, nil)
+	claimText := "Updating the gateway removes every connection"
+	require.NoError(t, work.ReplaceClaims(ctx, "u1", []store.Claim{
+		{ClaimID: "c1", Ord: 0, Text: claimText, Status: "active"},
+	}))
+
+	const model = "test-model"
+	vector := []float32{1, 0, 0}
+	require.NoError(t, work.UpsertClaimEmbeddings(ctx, model, len(vector), []store.ClaimEmbeddingWrite{
+		{Hash: embed.Hash(claimText), Vector: embed.EncodeVector(vector)},
+	}))
+	sem := &store.SemanticQuery{Model: model, Vector: vector}
+
+	hits, err := work.SearchClaims(ctx, "zzz_no_lexical_or_trigram_match_zzz", false, 10, sem)
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, "semantic", hits[0].Why)
+	require.Equal(t, "ergw", hits[0].Slug)
 }
 
 // seedVictimDoc plants a "personal"-scoped document with a claim only "personal" can see,
@@ -203,7 +266,7 @@ func TestUpsertHijackAttemptLeavesClaimsUnreachable(t *testing.T) {
 	})
 	require.ErrorIs(t, err, store.ErrScopeDenied)
 
-	hits, err := work.SearchClaims(ctx, "secret", false, 10)
+	hits, err := work.SearchClaims(ctx, "secret", false, 10, nil)
 	require.NoError(t, err)
 	require.Empty(t, hits, "the victim's claims must stay unreachable from work")
 

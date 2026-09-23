@@ -23,7 +23,7 @@ func TestMigrateCreatesExpectedTables(t *testing.T) {
 		require.NoError(t, rows.Scan(&name))
 		names = append(names, name)
 	}
-	require.Equal(t, []string{"admin_audit_log", "agent_tokens", "audit_log", "chunks", "claims", "documents", "edges", "lint_findings"}, names)
+	require.Equal(t, []string{"admin_audit_log", "agent_tokens", "audit_log", "chunks", "claim_embeddings", "claims", "documents", "edges", "lint_findings"}, names)
 }
 
 func TestMigrateIsIdempotent(t *testing.T) {

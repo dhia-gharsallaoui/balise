@@ -48,14 +48,14 @@ type ContextInput struct {
 }
 
 // ContextPage is one page packed into the returned ContextPack. Why records
-// how this page was found -- a search hit's own lexical/trigram reason
-// (store.Hit.Why, exactly as search.go's SearchHit already surfaces it), or
-// the edge kind ("specializes"/"supersedes") that pulled it in as an
-// expansion neighbour of a search hit. It exists so a caller can see for
-// itself that nothing here comes from semantic similarity -- there is no
-// score field, because this package has no embedding-based relevance
-// signal to report, and printing the raw lexical/RRF score here would
-// invite exactly the semantic-matching misreading the task brief warns
+// how this page was found -- a search hit's own lexical/trigram/semantic
+// reason (store.Hit.Why, exactly as search.go's SearchHit already surfaces
+// it, now including "semantic" when a configured embedder's vector arm won
+// the RRF fusion for that hit), or the edge kind
+// ("specializes"/"supersedes") that pulled it in as an expansion neighbour
+// of a search hit. There is still no numeric score field: Why already says
+// which retrieval arm produced the hit, and printing a raw RRF score here
+// would invite a confidence-magnitude misreading the task brief warns
 // against.
 type ContextPage struct {
 	Slug   string `json:"slug"`
@@ -84,10 +84,11 @@ type UnloadedPage struct {
 // Coverage is set honestly, the same way SearchOutput's is: "ok" when at
 // least one page was actually packed, "low" otherwise -- never a semantic
 // confidence score, because none is computed. Ranking behind Pages' order
-// is lexical only (reusing SearchClaims, the same RRF fusion of tsvector
-// and pg_trgm search.go already uses): this environment has neither
-// pgvector nor a TEI embedding service, so there is no semantic ranking
-// signal anywhere in this tool, and none is simulated.
+// reuses SearchClaims (search.go's own RRF fusion of tsvector, pg_trgm, and
+// -- when a model is configured on this deployment -- an in-process
+// embedding arm; see deps.semanticQuery and internal/store's
+// SemanticQuery). Without a configured model, ranking here is lexical
+// only, exactly as before, with no error and no behaviour change.
 type ContextOutput struct {
 	Pages      []ContextPage  `json:"pages"`
 	Unloaded   []UnloadedPage `json:"unloaded"`
@@ -170,7 +171,9 @@ func (d *deps) context(ctx context.Context, req *sdk.CallToolRequest, in Context
 // candidates, then expand via specializes (+supersedes when
 // IncludeHistorical) edges one hop out from those candidates.
 func (d *deps) contextCandidates(ctx context.Context, q *store.Queries, in ContextInput) ([]contextCandidate, error) {
-	hits, err := q.SearchClaims(ctx, in.Query, in.IncludeHistorical, contextSearchTopK)
+	hits, err := q.SearchClaims(
+		ctx, in.Query, in.IncludeHistorical, contextSearchTopK, d.semanticQuery(ctx, in.Query),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
