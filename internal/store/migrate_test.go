@@ -12,8 +12,21 @@ import (
 
 func TestMigrateCreatesExpectedTables(t *testing.T) {
 	pool := testutil.NewDB(t)
-	rows, err := pool.Query(context.Background(),
-		`select tablename from pg_tables where schemaname = 'public' order by tablename`)
+	ctx := context.Background()
+
+	// testutil.NewDB isolates this test into its own schema (search_path <schema>,public),
+	// not literal "public" -- asserting against schemaname = 'public' here would actually be
+	// checking the shared dev database's real, pre-existing tables (e.g. the live vault this
+	// same Postgres instance holds), and would keep passing even if per-test isolation were
+	// completely broken. current_schema() asks Postgres which schema this connection's
+	// unqualified statements actually landed in, the same way verifyIsolatedSchema does.
+	var schema string
+	require.NoError(t, pool.QueryRow(ctx, `select current_schema()`).Scan(&schema))
+	require.NotEqual(t, "public", schema,
+		"expected this test's own isolated schema, not the shared \"public\" -- per-test isolation appears broken")
+
+	rows, err := pool.Query(ctx,
+		`select tablename from pg_tables where schemaname = $1 order by tablename`, schema)
 	require.NoError(t, err)
 	defer rows.Close()
 
