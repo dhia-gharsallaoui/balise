@@ -59,42 +59,42 @@ func commitGroups() []commitGroup {
 	work := workPages()
 	return []commitGroup{
 		{
-			message: "chore: seed the shared ExpressRoute transit hub and AKS fleet entities",
+			message: "chore: seed the shared event bus and Postgres cluster entities",
 			by:      authorAda, date: "2026-08-04T10:00:00Z",
-			pages: work[0:4], // expressroute-transit, shared-aks-fleet, both node-image states
+			pages: work[0:4], // shared-event-bus, shared-postgres-cluster, both cluster-version states
 		},
 		{
-			message: "docs: capture the IaC and AKS fleet gotchas engineers keep re-discovering",
+			message: "docs: capture the Postgres and Redis gotchas engineers keep re-discovering",
 			by:      authorMarcus, date: "2026-08-07T14:30:00Z",
-			pages: work[4:7], // node pool taints, terraform for_each, azfw policy import
+			pages: work[4:7], // stats-target upgrade drop, migration rename ordering, redis eviction
 		},
 		{
-			message: "feat: adopt the shared fleet and per-subscription workspace decisions",
+			message: "feat: adopt the shared Postgres cluster and read-replica decisions",
 			by:      authorAda, date: "2026-08-15T09:15:00Z",
-			pages: work[7:10], // terraform workspaces, aks fleet model, dual-circuit standard
+			pages: work[7:10], // schema-per-service, shared cluster standard, read-replica threshold
 		},
 		{
 			message: "balise: sync onboarding and credential-rotation procedures from the runbook repo",
 			by:      authorMarcus, date: "2026-08-20T16:45:00Z",
-			pages: work[10:12], // onboard subscription, rotate fleet credentials
+			pages: work[10:12], // onboard service to shared postgres, rotate shared credentials
 		},
 		{
-			message: "chore: log open platform issues and the august pipeline incident",
+			message: "chore: log open platform issues and the august CI/CD outage",
 			by:      authorAda, date: "2026-08-25T11:20:00Z",
-			pages: work[12:16], // drift detector, capacity headroom, pipeline outage, on-call note
+			pages: work[12:16], // ci flakiness detector, consumer lag headroom, pipeline outage, on-call note
 		},
 		{
-			message: "feat: onboard Acme retail SD-WAN fabric knowledge",
+			message: "feat: onboard Acme checkout payments and feature flag knowledge",
 			by:      authorPriya, date: "2026-09-01T13:00:00Z",
 			pages: acmePages(),
 		},
 		{
-			message: "feat: onboard Globex ExpressRoute and storage knowledge",
+			message: "feat: onboard Globex order events and SSO knowledge",
 			by:      authorSana, date: "2026-09-09T10:30:00Z",
 			pages: globexPages(),
 		},
 		{
-			message: "feat: onboard Initech shared compute and storage baseline",
+			message: "feat: onboard Initech worker fleet and email delivery baseline",
 			by:      authorLeo, date: "2026-09-14T15:10:00Z",
 			pages: initechPages(),
 		},

@@ -6,253 +6,194 @@ package main
 func workPages() []page {
 	return []page{
 		{
-			UID: uid(1), Slug: "expressroute-transit", Type: "note", Scope: "work",
-			Title:   "ExpressRoute Transit",
-			Aliases: []string{"er-transit"},
-			Tags:    []string{"vendor/azure/expressroute", "layer/network"},
+			UID: uid(1), Slug: "shared-event-bus", Type: "note", Scope: "work",
+			Title:   "Shared Event Bus",
+			Aliases: []string{"event-bus"},
+			Tags:    []string{"layer/queue", "vendor/kafka"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Shared transit hub carrying all client circuits into the platform backbone"},
-				{ID: "c2", Status: "active", Text: "Each client circuit peers here rather than to a dedicated gateway"},
-				{ID: "c3", Status: "active", Text: "Capacity is tracked per circuit, not per gateway, since the hub is shared"},
+				{ID: "c1", Status: "active", Text: "Every service publishes domain events onto one shared Kafka cluster instead of running its own broker"},
+				{ID: "c2", Status: "active", Text: "Topics are namespaced by service name so two teams can never collide on the same topic"},
+				{ID: "c3", Status: "active", Text: "Consumer groups rebalance automatically as a service scales its pod count up or down"},
 			},
 			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-08-04",
-			Body: "The transit hub is the single ExpressRoute gateway pair every client circuit " +
-				"terminates on. It exists so a new client onboarding never needs a new gateway " +
-				"deployment, only a new circuit peering against the existing hub.\n\n" +
-				"See [[expressroute-dual-circuit-standard]] for how redundancy is modelled on top " +
-				"of this shared hub, and [[expressroute-capacity-headroom-shrinking]] for the " +
-				"current capacity picture.\n",
+			Body: "The shared cluster is the single Kafka deployment every service publishes domain events onto, rather than each service running its own broker.\n\nSee [[event-bus-consumer-lag-headroom-shrinking]] for the current capacity picture, and [[cicd-pipeline-outage-2026-08]] for an incident that briefly touched this cluster's own deploy pipeline.\n",
 		},
 		{
-			UID: uid(2), Slug: "shared-aks-fleet", Type: "note", Scope: "work",
-			Title:   "Shared AKS Fleet",
-			Aliases: []string{"aks-fleet"},
-			Tags:    []string{"vendor/azure/aks", "layer/compute"},
+			UID: uid(2), Slug: "shared-postgres-cluster", Type: "note", Scope: "work",
+			Title:   "Shared Postgres Cluster",
+			Aliases: []string{"postgres-cluster"},
+			Tags:    []string{"layer/database", "vendor/postgres"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "One fleet manager rolls node image updates across every member cluster"},
-				{ID: "c2", Status: "active", Text: "Member clusters opt in per subscription, not per node pool"},
-				{ID: "c3", Status: "active", Text: "Fleet-wide rollout is staged over three rings, one week apart"},
+				{ID: "c1", Status: "active", Text: "One Postgres cluster hosts every service's schema instead of a database per service"},
+				{ID: "c2", Status: "active", Text: "Each service connects through a role scoped to only its own schema"},
 			},
 			Status: "active", Owner: "Marcus Webb", LastVerified: "2026-08-11",
-			Body: "The fleet groups every client-facing AKS cluster under one update manager so a " +
-				"node image or control-plane bump ships once instead of per cluster.\n\n" +
-				"Current and prior node images are tracked as state pages: " +
-				"[[aks-fleet-node-image-2026-09]] is active, [[aks-fleet-node-image-2026-06]] is " +
-				"the superseded prior baseline. [[standardize-on-aks-fleet-model]] records why " +
-				"per-client clusters were retired in favour of this shared model.\n",
+			Body: "The shared cluster hosts one schema per service rather than a dedicated instance per service. Current and prior major-version baselines are tracked as state pages: [[postgres-cluster-version-v16]] is active, [[postgres-cluster-version-v14]] is the superseded prior baseline. [[standardize-on-shared-postgres-cluster]] records why per-service instances were retired in favor of this shared model.\n",
 		},
 		{
-			UID: uid(3), Slug: "aks-fleet-node-image-2026-06", Type: "state", Scope: "work",
-			Title:        "AKS fleet node image, June 2026 baseline",
-			SupersededBy: "aks-fleet-node-image-2026-09",
-			Tags:         []string{"layer/compute", "vendor/azure/aks"},
+			UID: uid(3), Slug: "postgres-cluster-version-v14", Type: "state", Scope: "work",
+			Title:        "Shared Postgres cluster version, v14 baseline",
+			SupersededBy: "postgres-cluster-version-v16",
+			Tags:         []string{"layer/database", "vendor/postgres"},
 			AsOf:         "2026-06-02",
 			Claims: []claim{
-				{ID: "c1", Status: "superseded", AsOf: "2026-09-01", Text: "Ubuntu 22.04 image with kernel 5.15, fleet-wide since June ring rollout"},
-				{ID: "c2", Status: "superseded", AsOf: "2026-09-01", Text: "Contains the cgroup v1 default that later caused pod eviction flapping"},
+				{ID: "c1", Status: "superseded", AsOf: "2026-08-15", Text: "Cluster ran Postgres 14 from launch through mid-August 2026"},
+				{ID: "c2", Status: "superseded", AsOf: "2026-08-15", Text: "Statistics targets on the largest tables were hand-tuned above the v14 default"},
 			},
-			Status: "superseded", Owner: "Marcus Webb", LastVerified: "2026-09-01",
-			Body: "This was the [[shared-aks-fleet]]'s node image baseline from the June ring " +
-				"rollout through early September. It is superseded by " +
-				"[[aks-fleet-node-image-2026-09]], which fixes the cgroup default noted below.\n",
+			Status: "superseded", Owner: "Marcus Webb", LastVerified: "2026-08-15",
+			Body: "This was the [[shared-postgres-cluster]]'s version baseline from launch through mid-August. It is superseded by [[postgres-cluster-version-v16]], which does not preserve the hand-tuned statistics targets noted below — see [[postgres-major-upgrade-drops-statistics-targets]].\n",
 		},
 		{
-			UID: uid(4), Slug: "aks-fleet-node-image-2026-09", Type: "state", Scope: "work",
-			Title: "AKS fleet node image, September 2026 baseline",
-			About: []string{"aks-node-pool-recreate-drops-taints"},
-			Tags:  []string{"layer/compute", "vendor/azure/aks"},
-			AsOf:  "2026-09-08",
+			UID: uid(4), Slug: "postgres-cluster-version-v16", Type: "state", Scope: "work",
+			Title: "Shared Postgres cluster version, v16 baseline",
+			About: []string{"postgres-major-upgrade-drops-statistics-targets"},
+			Tags:  []string{"layer/database", "vendor/postgres"},
+			AsOf:  "2026-08-15",
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Ubuntu 22.04 image with kernel 6.2, switched to cgroup v2 by default"},
-				{ID: "c2", Status: "active", Text: "Rolled out fleet-wide over three weekly rings ending September 8"},
-				{ID: "c3", Status: "active", Text: "Node pool recreate still drops custom taints; see linked gotcha"},
+				{ID: "c1", Status: "active", Text: "Cluster moved to Postgres 16 in August 2026 for its native logical replication improvements"},
+				{ID: "c2", Status: "active", Text: "Hand-tuned statistics targets have to be reapplied after every major version upgrade"},
 			},
-			Status: "active", Owner: "Marcus Webb", LastVerified: "2026-09-08",
-			Body: "Current baseline for the [[shared-aks-fleet]]. Fixes the cgroup v1 pod " +
-				"eviction flapping from [[aks-fleet-node-image-2026-06]], but does not change " +
-				"the node pool recreate behaviour tracked in " +
-				"[[aks-node-pool-recreate-drops-taints]].\n",
+			Status: "active", Owner: "Marcus Webb", LastVerified: "2026-09-01",
+			Body: "Current baseline for the [[shared-postgres-cluster]]. The upgrade did not preserve custom statistics targets, tracked in [[postgres-major-upgrade-drops-statistics-targets]].\n",
 		},
 		{
-			UID: uid(5), Slug: "aks-node-pool-recreate-drops-taints", Type: "gotcha", Scope: "work",
-			Title: "Recreating an AKS node pool drops custom taints",
-			Tags:  []string{"layer/compute", "vendor/azure/aks"},
+			UID: uid(5), Slug: "postgres-major-upgrade-drops-statistics-targets", Type: "gotcha", Scope: "work",
+			Title: "Postgres major version upgrade drops custom statistics targets",
+			Tags:  []string{"layer/database", "vendor/postgres"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Node pool recreate resets taints to the pool default, dropping custom ones"},
-				{ID: "c2", Status: "active", Text: "Re-apply taints via the fleet update run, not the base pool manifest"},
-				{ID: "c3", Status: "active", Text: "Affects every fleet member, confirmed across three separate ring rollouts"},
+				{ID: "c1", Status: "active", Text: "pg_upgrade recreates each table's statistics configuration at the server default"},
+				{ID: "c2", Status: "active", Text: "Custom ALTER TABLE ... SET STATISTICS overrides silently revert to 100"},
+				{ID: "c3", Status: "active", Text: "Query plans degrade within a day as the planner's row estimates drift from reality"},
 			},
-			Status: "active", Owner: "Marcus Webb", LastVerified: "2026-09-10",
-			Body: "Any node pool recreate operation on the [[shared-aks-fleet]] — including its " +
-				"own ring rollout — resets that pool's taints to whatever the base pool manifest " +
-				"declares, silently dropping any taint added by hand afterwards.\n\n" +
-				"Workaround: re-add the taint through the fleet update run's post-step hook so it " +
-				"survives the next recreate, rather than patching the live pool directly.\n",
+			Status: "active", Owner: "Marcus Webb", LastVerified: "2026-09-02",
+			Body: "Any pg_upgrade run against the [[shared-postgres-cluster]] resets every table's statistics target to the server default, silently dropping hand-tuned overrides.\n\nWorkaround: re-apply the custom statistics targets from the tracked list immediately after upgrade, before ANALYZE runs against the new default.\n",
 		},
 		{
-			UID: uid(6), Slug: "terraform-subscription-foreach-reorder", Type: "gotcha", Scope: "work",
-			Title: "Terraform for_each over subscriptions reorders on rename",
-			Tags:  []string{"layer/iac"},
+			UID: uid(6), Slug: "migration-rename-changes-apply-order", Type: "gotcha", Scope: "work",
+			Title: "Renaming a migration file changes its apply order",
+			Tags:  []string{"layer/database", "layer/ci"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Renaming a subscription alias reorders the for_each map, forcing unrelated recreates"},
-				{ID: "c2", Status: "active", Text: "Keying the for_each on subscription ID instead of alias avoids the reorder"},
+				{ID: "c1", Status: "active", Text: "The migration tool orders files by their numeric timestamp prefix, not by git history"},
+				{ID: "c2", Status: "active", Text: "Renaming a migration file to fix a typo changes that prefix and its position in the run order"},
+				{ID: "c3", Status: "active", Text: "A later migration can silently apply before the dependency it assumed already ran"},
 			},
 			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-08-20",
-			Body: "The landing zone module iterates subscriptions with `for_each` keyed on the " +
-				"human-readable alias. Renaming one alias changes the map's key set, which " +
-				"Terraform treats as every other key changing position, and it plans recreates " +
-				"for resources that did not actually change.\n\n" +
-				"Fix: key on subscription ID and keep the alias as a plain attribute.\n",
+			Body: "The migration runner orders files purely by their numeric timestamp prefix. Renaming a file — even just to fix a typo in its description — changes that prefix and can reorder it relative to migrations that depend on it running first.\n\nFix: never rename an already-applied migration file; add a new one instead.\n",
 		},
 		{
-			UID: uid(7), Slug: "azfw-policy-import-priority-clamp", Type: "gotcha", Scope: "work",
-			Title: "Azure Firewall policy import clamps rule priority to 65000",
-			Tags:  []string{"layer/network", "layer/security", "vendor/azure/azfw"},
+			UID: uid(7), Slug: "redis-eviction-removes-keys-before-ttl-expires", Type: "gotcha", Scope: "work",
+			Title: "Redis eviction removes keys before their TTL expires",
+			Tags:  []string{"layer/cache", "vendor/redis"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Imported rule collections above priority 65000 are silently clamped on import"},
-				{ID: "c2", Status: "active", Text: "Clamped rules still show their original priority in the portal view"},
+				{ID: "c1", Status: "active", Text: "allkeys-lru eviction runs whenever the cluster is near maxmemory, independent of any key's TTL"},
+				{ID: "c2", Status: "active", Text: "A session key with an hour left on its TTL can still be evicted first if it is the least recently used"},
+				{ID: "c3", Status: "active", Text: "Code that assumes TTL is the only way a cached value disappears breaks on the first null it doesn't check for"},
 			},
-			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-07-30",
-			Body: "Importing a firewall policy exported from a different tenant can carry rule " +
-				"collection priorities above the 65000 ceiling. The import clamps them rather " +
-				"than rejecting the import, and the portal keeps showing the original number, so " +
-				"the clamp is easy to miss until rule ordering behaves unexpectedly.\n",
+			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-09-05",
+			Body: "The shared cache runs allkeys-lru eviction, which can remove a key long before its TTL would have expired if the cluster is near maxmemory. Any read path that assumes a present key means an unexpired one will fail exactly when the cache is under the most pressure.\n",
 		},
 		{
-			UID: uid(8), Slug: "adopt-terraform-workspaces-per-subscription", Type: "decision", Scope: "work",
-			Title: "Adopt one Terraform workspace per subscription",
-			Tags:  []string{"layer/iac"},
+			UID: uid(8), Slug: "adopt-schema-per-service", Type: "decision", Scope: "work",
+			Title: "Adopt one Postgres schema per service",
+			Tags:  []string{"layer/database", "layer/backend"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "One workspace per subscription replaces the prior single-workspace-per-region model"},
-				{ID: "c2", Status: "active", Text: "State blast radius is now bounded to one subscription per apply"},
+				{ID: "c1", Status: "active", Text: "Every service gets its own schema in the shared cluster instead of a shared public schema"},
+				{ID: "c2", Status: "active", Text: "A bad migration in one schema cannot lock or corrupt another service's tables"},
+				{ID: "c3", Status: "active", Text: "Cross-schema joins are discouraged so services stay independently deployable"},
 			},
-			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-08-01",
-			Body: "Adopted a one-workspace-per-subscription layout so a bad apply can only affect " +
-				"one subscription's state. This replaced the earlier single-workspace-per-region " +
-				"layout, which meant every apply touched every client sharing that region.\n\n" +
-				"[[onboard-new-subscription-to-landing-zone]] now provisions the workspace as its " +
-				"first step.\n",
+			Status: "active", Owner: "Marcus Webb", LastVerified: "2026-08-10",
+			Body: "Adopted one schema per service on the [[shared-postgres-cluster]] instead of a shared public schema, so a bad migration is contained to its own service. [[onboard-service-to-shared-postgres]] provisions the schema as its first step.\n",
 		},
 		{
-			UID: uid(9), Slug: "standardize-on-aks-fleet-model", Type: "decision", Scope: "work",
-			Title: "Standardize on the shared AKS fleet model",
-			Tags:  []string{"layer/compute", "vendor/azure/aks"},
+			UID: uid(9), Slug: "standardize-on-shared-postgres-cluster", Type: "decision", Scope: "work",
+			Title: "Standardize on the shared Postgres cluster model",
+			Tags:  []string{"layer/database", "layer/infra"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Per-client AKS clusters are retired in favour of the shared fleet"},
-				{ID: "c2", Status: "active", Text: "Fleet membership is the default for any new client cluster"},
+				{ID: "c1", Status: "active", Text: "New services default onto the shared cluster instead of provisioning a dedicated instance"},
+				{ID: "c2", Status: "active", Text: "A dedicated instance is still available by exception for workloads with unusual isolation needs"},
 			},
-			Status: "active", Owner: "Marcus Webb", LastVerified: "2026-08-15",
-			Body: "Standardized on [[shared-aks-fleet]] as the only supported AKS operating model. " +
-				"Existing per-client clusters are migrated in on their next upgrade window rather " +
-				"than all at once.\n",
+			Status: "active", Owner: "Marcus Webb", LastVerified: "2026-08-12",
+			Body: "Standardized on [[shared-postgres-cluster]] as the default for any new service. A dedicated instance remains available by exception, granted rarely and only for workloads with genuinely unusual isolation requirements.\n",
 		},
 		{
-			UID: uid(10), Slug: "expressroute-dual-circuit-standard", Type: "decision", Scope: "work",
-			Title: "Require dual ExpressRoute circuits for any client above tier 2",
-			Tags:  []string{"layer/network", "vendor/azure/expressroute"},
+			UID: uid(10), Slug: "require-read-replica-above-tier-2", Type: "decision", Scope: "work",
+			Title: "Require an async read replica above tier 2 read load",
+			Tags:  []string{"layer/database", "layer/infra"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Tier 2+ clients get two circuits in different peering locations"},
-				{ID: "c2", Status: "active", Text: "Tier 1 clients keep a single circuit unless they request otherwise"},
+				{ID: "c1", Status: "active", Text: "Any service whose read traffic crosses the tier 2 threshold must add an async replica"},
+				{ID: "c2", Status: "active", Text: "Read replicas absorb reporting and analytics queries so they cannot starve primary writes"},
+				{ID: "c3", Status: "active", Text: "The replica lag budget is documented per service, not assumed to be zero"},
 			},
-			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-08-05",
-			Body: "Any client above tier 2 now gets two [[expressroute-transit]] circuits in " +
-				"different peering locations rather than one. [[expressroute-capacity-headroom-shrinking]] " +
-				"is tracking how much headroom this standard leaves on the shared hub.\n",
+			Status: "active", Owner: "Marcus Webb", LastVerified: "2026-08-14",
+			Body: "Any service crossing the tier 2 read-load threshold on [[shared-postgres-cluster]] must add an async read replica, so reporting and analytics queries can no longer starve primary writes.\n",
 		},
 		{
-			UID: uid(11), Slug: "onboard-new-subscription-to-landing-zone", Type: "procedure", Scope: "work",
-			Title: "Onboard a new subscription to the landing zone",
-			Tags:  []string{"layer/iac", "layer/identity"},
+			UID: uid(11), Slug: "onboard-service-to-shared-postgres", Type: "procedure", Scope: "work",
+			Title: "Onboard a new service to the shared Postgres cluster",
+			Tags:  []string{"layer/database", "layer/backend"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Create the subscription-scoped Terraform workspace before any resource apply"},
-				{ID: "c2", Status: "active", Text: "Grant the landing zone service principal Owner only at the subscription scope"},
-				{ID: "c3", Status: "active", Text: "Run drift detection once immediately after the first apply completes"},
+				{ID: "c1", Status: "active", Text: "A new service requests a schema and a scoped role before its first migration runs"},
+				{ID: "c2", Status: "active", Text: "The onboarding checklist requires a connection pool limit before granting production access"},
 			},
 			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-08-18",
-			Body: "1. Create the subscription and its dedicated Terraform workspace per " +
-				"[[adopt-terraform-workspaces-per-subscription]].\n" +
-				"2. Grant the landing zone service principal Owner at the subscription scope " +
-				"only — never at management group scope.\n" +
-				"3. Apply the baseline landing zone module.\n" +
-				"4. Run drift detection once immediately after; see " +
-				"[[drift-detector-false-positives-on-tags]] for a known false-positive pattern on " +
-				"the first run.\n",
+			Body: "1. Request a schema and a role scoped to it, per [[adopt-schema-per-service]].\n2. Set a connection pool limit before requesting production access.\n3. Run the first migration and confirm it only touched the new schema.\n",
 		},
 		{
-			UID: uid(12), Slug: "rotate-aks-fleet-cluster-credentials", Type: "procedure", Scope: "work",
-			Title: "Rotate shared AKS fleet cluster credentials",
-			Tags:  []string{"layer/compute", "layer/identity", "vendor/azure/aks"},
+			UID: uid(12), Slug: "rotate-shared-postgres-credentials", Type: "procedure", Scope: "work",
+			Title: "Rotate shared Postgres cluster credentials",
+			Tags:  []string{"layer/database", "layer/security"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Rotate the fleet manager's credential first, member clusters second"},
-				{ID: "c2", Status: "active", Text: "Old credentials remain valid for one hour after rotation to avoid downtime"},
+				{ID: "c1", Status: "active", Text: "Credentials rotate on a fixed quarterly schedule, not only after a suspected leak"},
+				{ID: "c2", Status: "active", Text: "Every service reads its password from the secrets manager, never from a checked-in config file"},
+				{ID: "c3", Status: "active", Text: "The old credential stays valid for one hour after rotation so in-flight connections drain cleanly"},
 			},
 			Status: "active", Owner: "Marcus Webb", LastVerified: "2026-09-05",
-			Body: "1. Rotate [[shared-aks-fleet]]'s manager credential.\n" +
-				"2. Rotate each member cluster's credential, oldest cluster first.\n" +
-				"3. Confirm the fleet manager can still reach every member before revoking the " +
-				"prior credential.\n",
+			Body: "1. Rotate each service's role credential in the secrets manager, never in a checked-in config file.\n2. Leave the old credential valid for one hour so in-flight connections drain cleanly.\n3. Confirm every service has picked up the new credential before revoking the old one.\n\nThis runs quarterly on schedule against [[shared-postgres-cluster]], not only after a suspected leak.\n",
 		},
 		{
-			UID: uid(13), Slug: "drift-detector-false-positives-on-tags", Type: "issue", Scope: "work",
-			Title: "Drift detector reports false positives on cost-center tags",
-			Tags:  []string{"layer/iac", "layer/observability"},
+			UID: uid(13), Slug: "ci-flakiness-detector-false-positives-on-retries", Type: "issue", Scope: "work",
+			Title: "CI flakiness detector reports false positives on retried jobs",
+			Tags:  []string{"layer/ci", "vendor/github_actions"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Cost-center tags applied by the billing sync are flagged as drift"},
-				{ID: "c2", Status: "active", Text: "Detector runs hourly and re-flags the same tags every cycle"},
+				{ID: "c1", Status: "active", Text: "The detector flags any job whose second attempt passed as a flaky test"},
+				{ID: "c2", Status: "active", Text: "A job retried after a runner network blip gets the same flaky label as a genuinely nondeterministic test"},
 			},
 			Status: "open", Owner: "Ada Okonkwo", LastVerified: "2026-09-12",
-			Body: "The drift detector treats any tag it did not itself apply as drift, " +
-				"including cost-center tags written by the separate billing sync job. This makes " +
-				"every subscription look perpetually drifted on that one field.\n\n" +
-				"Planned fix: exclude the billing sync's tag keys from the drift comparison.\n",
+			Body: "The flakiness detector treats any job that failed once and passed on retry as flaky, with no distinction between a genuinely nondeterministic test and a job that failed because the runner briefly lost network.\n\nPlanned fix: only count a retry as flaky evidence if the first failure's error signature is test-side, not infrastructure-side.\n",
 		},
 		{
-			UID: uid(14), Slug: "expressroute-capacity-headroom-shrinking", Type: "issue", Scope: "work",
-			Title: "ExpressRoute transit hub capacity headroom is shrinking",
-			Tags:  []string{"layer/network", "vendor/azure/expressroute"},
+			UID: uid(14), Slug: "event-bus-consumer-lag-headroom-shrinking", Type: "issue", Scope: "work",
+			Title: "Shared event bus consumer lag headroom is shrinking",
+			Tags:  []string{"layer/queue", "layer/observability"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Aggregate circuit usage crossed 70 percent of hub capacity in August"},
-				{ID: "c2", Status: "active", Text: "Each new tier 2+ client adds two circuits under the dual standard"},
+				{ID: "c1", Status: "active", Text: "Average consumer lag across the shared cluster has grown every month since March"},
+				{ID: "c2", Status: "active", Text: "Two more services are scheduled to onboard before the next capacity review"},
 			},
-			Status: "open", Owner: "Ada Okonkwo", LastVerified: "2026-09-02",
-			Body: "Aggregate usage across all circuits on [[expressroute-transit]] crossed 70 " +
-				"percent of the hub's provisioned capacity in August, driven partly by " +
-				"[[expressroute-dual-circuit-standard]] doubling circuit count for new tier 2+ " +
-				"clients. A capacity upgrade is being scoped; Globex's own circuit upgrade " +
-				"procedure follows the pattern this hub-wide upgrade is expected to use.\n",
+			Status: "open", Owner: "Ada Okonkwo", LastVerified: "2026-09-10",
+			Body: "Aggregate consumer lag on [[shared-event-bus]] has grown every month since March, and two more services are scheduled to onboard before the next capacity review. A broker capacity upgrade is being scoped.\n",
 		},
 		{
-			UID: uid(15), Slug: "landing-zone-pipeline-outage-2026-08", Type: "incident", Scope: "work",
-			Title: "Landing zone pipeline outage, August 2026",
-			Tags:  []string{"layer/iac", "layer/observability", "layer/agents"},
+			UID: uid(15), Slug: "cicd-pipeline-outage-2026-08", Type: "incident", Scope: "work",
+			Title: "CI/CD pipeline outage, August 2026",
+			Tags:  []string{"layer/ci", "layer/release", "vendor/github_actions"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Pipeline queue backed up for six hours after a shared runner pool outage"},
-				{ID: "c2", Status: "active", Text: "An on-call triage agent drained the queue once the runner pool recovered"},
-				{ID: "c3", Status: "active", Text: "No subscription apply was lost; queued runs replayed in original order"},
+				{ID: "c1", Status: "active", Text: "The shared GitHub Actions runner pool ran out of capacity and queued every deploy"},
+				{ID: "c2", Status: "active", Text: "On-call drained the backlog by cancelling non-essential scheduled jobs first"},
+				{ID: "c3", Status: "active", Text: "No deploy was lost; queued runs replayed in original order once capacity recovered"},
 			},
 			Status: "resolved", Owner: "Ada Okonkwo", LastVerified: "2026-08-22",
-			Body: "The shared CI runner pool backing every landing zone pipeline run went " +
-				"unhealthy for roughly six hours, backing up the apply queue across every " +
-				"subscription onboarded via [[onboard-new-subscription-to-landing-zone]].\n\n" +
-				"Once the runner pool recovered, the on-call triage agent drained the backlog in " +
-				"original order; no apply was lost. This also touched capacity planning — see " +
-				"[[expressroute-capacity-headroom-shrinking]] for the unrelated but concurrently " +
-				"tracked hub capacity issue raised during the same on-call window.\n",
+			Body: "The shared GitHub Actions runner pool backing every deploy pipeline ran out of capacity for roughly six hours, queuing every pending deploy across every service.\n\nOn-call drained the backlog by cancelling non-essential scheduled jobs first, then let queued deploys replay in original order once capacity recovered. No deploy was lost.\n",
 		},
 		{
 			UID: uid(16), Slug: "platform-oncall-escalation-contacts", Type: "note", Scope: "work",
 			Title: "Platform on-call escalation contacts",
-			Tags:  []string{"layer/observability"},
+			Tags:  []string{"layer/observability", "layer/agents", "vendor/pagerduty"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Primary on-call rotates weekly, Monday 09:00 handoff"},
-				{ID: "c2", Status: "active", Text: "Secondary escalation is the platform lead, paged after fifteen minutes"},
+				{ID: "c1", Status: "active", Text: "Primary on-call carries the pager for one week at a time, handoff every Monday"},
+				{ID: "c2", Status: "active", Text: "Escalating past secondary on-call pages the engineering director directly"},
 			},
 			Status: "active", Owner: "Ada Okonkwo", LastVerified: "2026-09-15",
-			Body: "Primary on-call rotates weekly with a Monday 09:00 handoff. Unacknowledged " +
-				"pages escalate to the secondary (platform lead) after fifteen minutes.\n\n" +
-				"For the step-by-step escalation flowchart, see " +
-				"[[incident-response-master-runbook]] — that page has not been written yet; " +
-				"this reference is left in deliberately as a real, unfixed dangling link.\n",
+			Body: "Primary on-call rotates weekly with a Monday 09:00 handoff. Unacknowledged pages escalate to secondary on-call, and past that, directly to the engineering director.\n\nFor the step-by-step escalation flowchart, see [[incident-response-master-runbook]] — that page has not been written yet; this reference is left in deliberately as a real, unfixed dangling link.\n",
 		},
 	}
 }

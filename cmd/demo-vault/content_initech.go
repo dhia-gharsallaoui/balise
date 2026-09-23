@@ -5,185 +5,144 @@ import (
 	"strings"
 )
 
-// oversizeTopic is one repetitive section of the deliberately oversize onboarding note below.
-// The template mirrors defaults/fixtures/globex-onboarding-oversize.md's own structure (a
-// fixed sentence shape, a different topic substituted each time) but reworded for Initech's
-// compute/storage account rather than Globex's network account, so the two oversize fixtures
-// in this codebase are not verbatim duplicates of each other.
+// oversizeTopic is one paragraph of the deliberately oversize onboarding note below; the
+// vault needs at least one page well past the others' length to exercise chunking and
+// pagination in anything reading claims or rendered bodies at scale.
 type oversizeTopic struct {
-	heading string
-	topic   string
-	reason  string
-	extra   string
+	heading, topic, reason, extra string
 }
 
 var initechOnboardingTopics = []oversizeTopic{
-	{"VM sizing requests", "VM sizing requests", "require a cost-center approval before the resize is scheduled", "needs a rollback SKU recorded before execution"},
-	{"Storage account provisioning", "storage account provisioning", "must go through the shared storage naming reservation first", "is tracked in the joint capacity spreadsheet"},
-	{"Backup retention changes", "backup retention changes", "need the retention period confirmed against the contract minimum", "is reviewed by the account's compliance contact"},
-	{"Disk encryption key rotation", "disk encryption key rotation", "must be scheduled during the agreed maintenance window", "produces an audit trail the customer can request"},
-	{"VM extension installs", "VM extension installs", "are blocked on non-approved extension publishers by policy", "has a named owner on both sides of the engagement"},
-	{"Compute subnet NSG changes", "compute subnet NSG changes", "require a peer review of the proposed rule diff", "is gated behind a change ticket reference"},
-	{"Storage lifecycle rule changes", "storage lifecycle rule changes", "depend on the immutability status being checked first", "is tracked in the joint change calendar"},
-	{"Storage RBAC role assignment", "storage RBAC role assignment", "must not grant Owner at the account scope directly", "needs a rollback plan documented before execution"},
-	{"Tag governance", "tag governance", "follows the shared cost-center tag schema, not a local one", "is reviewed quarterly with the account team"},
-	{"Monitoring alert rule changes", "monitoring alert rule changes", "need a paging threshold sign-off from the account owner", "is tracked in the joint change calendar"},
-	{"Capacity planning reviews", "capacity planning reviews", "happen monthly and require the prior month's actuals attached", "has a named owner on both sides of the engagement"},
-	{"Batch job scheduling changes", "batch job scheduling changes", "must avoid the nightly reconciliation window entirely", "produces an audit trail the customer can request"},
-	{"Credential rotation", "credential rotation", "requires the old credential kept valid for one hour", "is gated behind a peer review of the proposed change"},
-	{"VM image gallery updates", "VM image gallery updates", "must be validated against the B-series exception list first", "needs a rollback plan documented before execution"},
-	{"Quota increase requests", "quota increase requests", "go through the shared subscription quota tracker, not ad hoc", "is reviewed by the account's compliance contact"},
-	{"Cost allocation tag changes", "cost allocation tag changes", "must match the billing sync's expected tag keys exactly", "is tracked in the joint change calendar"},
-	{"Snapshot retention", "snapshot retention", "follows the same minimum as backup retention, not a shorter one", "has a named owner on both sides of the engagement"},
-	{"Storage container provisioning", "storage container provisioning", "requires the naming reservation step before creation", "is reviewed quarterly with the account team"},
-	{"VM extension timeout handling", "VM extension timeout handling", "needs the known resize-timeout gotcha checked first", "produces an audit trail the customer can request"},
-	{"Batch backlog escalation", "batch backlog escalation", "pages the account owner directly, not the shared on-call", "is gated behind a change ticket reference"},
+	{"Worker fleet sizing", "the shared RabbitMQ worker fleet", "is sized for steady-state batch volume, not headline peaks", "a burst above that baseline queues rather than fails outright"},
+	{"Email sending domain provisioning", "Initech's transactional email", "sends through a dedicated SendGrid subaccount rather than a shared one", "this keeps Initech's sender reputation isolated from every other tenant"},
+	{"Backup retention", "database backups", "are retained for thirty days on a rolling window", "anything older is only available by restoring the prior month's archive tier"},
+	{"API key rotation", "third-party API keys", "rotate on the same quarterly schedule as database credentials", "a key nearing expiry triggers a warning two weeks out, not a hard cutover"},
+	{"Worker image updates", "the worker container image", "rebuilds nightly from the base image regardless of whether application code changed", "this is what actually keeps the base layer's security patches current"},
+	{"Queue consumer scaling", "consumer count for the shared worker fleet", "scales on queue depth, not on CPU usage", "a CPU-bound job type can still look idle to the autoscaler while genuinely falling behind"},
+	{"Email suppression lists", "SendGrid's suppression list", "silently drops sends to any address that previously bounced or complained", "a resend to a suppressed address returns success from the API but never actually leaves"},
+	{"RabbitMQ permission grants", "queue permissions", "are granted per virtual host, not per queue", "a service asking for one queue's access gets read/write on every queue in that vhost"},
+	{"Tag governance", "resource tags", "are enforced at provisioning time, not retrofitted after the fact", "anything provisioned outside the standard procedure is missing tags nobody notices until a cost review"},
+	{"Monitoring alert rules", "alert thresholds for the worker fleet", "were set from the first month of production traffic", "they have not been revisited since traffic patterns shifted"},
+	{"Capacity planning", "next quarter's fleet capacity", "is planned from the prior quarter's ninety-fifth percentile load", "not from the average, which would understate real headroom needs"},
+	{"Batch job scheduling", "large batch jobs", "are scheduled to start after the lowest-traffic hour begins", "a job that starts late overlaps the fleet's peak and competes with live traffic"},
+	{"Credential rotation", "the shared worker fleet's service credentials", "rotate through the same secrets manager every other tenant uses", "the rotation window is the same one-hour drain period documented for Postgres"},
+	{"Worker container image updates", "a failed image build", "blocks that night's rebuild but does not roll back the previous image", "workers keep running the last good image until the next successful build"},
+	{"Quota increase requests", "a queue or storage quota increase", "requires a written justification tied to a specific upcoming launch", "an open-ended request without a launch date is routinely declined"},
+	{"Cost allocation tags", "the customer cost-allocation tag", "is required on every resource before it leaves the provisioning procedure", "a resource missing this tag shows up as unallocated spend at month end"},
+	{"Snapshot retention", "worker fleet configuration snapshots", "are kept for ninety days beyond backup's thirty", "these cover configuration drift, not data, and are pruned independently"},
+	{"Email subaccount provisioning", "a new SendGrid subaccount", "requires its own verified sending domain before its first send", "skipping verification queues the send indefinitely instead of failing it outright"},
+	{"Worker restart timeout handling", "a worker that does not acknowledge a graceful restart within thirty seconds", "is force-killed and its in-flight job requeued", "a job that is not idempotent can be processed twice as a result"},
+	{"Batch backlog escalation", "a batch backlog past the alert threshold for more than an hour", "pages on-call directly instead of waiting for the next business day", "this is what actually caught the June backlog before it grew further"},
 }
 
-// oversizeBody renders the onboarding note's body: an intro paragraph plus one section per
-// topic, each following the same fixed sentence shape. This is deliberately long — the task
-// calls for one genuine oversize page, not a manufactured list of problems, so the length
-// comes from a real (if repetitive) onboarding document shape rather than padding.
 func oversizeBody() string {
 	var b strings.Builder
 	b.WriteString("This note collects everything a new engineer needs before they touch the " +
-		"Initech environment for the first time. It exists because the account has enough " +
-		"local exceptions to the usual process that skipping it has caused real delays in the " +
-		"past, and it is deliberately long: every section below has been added after someone " +
-		"learned the hard way that it was missing.\n")
+		"Initech environment for the first time. It intentionally covers more ground than a " +
+		"single focused page would, because the alternative -- splitting it into twenty tiny " +
+		"pages nobody reads end to end during onboarding -- has been tried before and made the " +
+		"gaps in a new hire's mental model worse, not better. Read it in one sitting.\n")
 	for _, t := range initechOnboardingTopics {
 		fmt.Fprintf(&b, "\n## %s\n\n", t.heading)
-		fmt.Fprintf(&b,
-			"On the Initech account, %s %s. In practice this means that any engineer touching "+
-				"%s on this account should expect a slower cycle than on an internal-only "+
-				"project: the same change on an internal system would typically move faster, "+
-				"but here it also %s. New engineers consistently underestimate this the first "+
-				"time, assuming the internal default process applies unchanged, and the "+
-				"resulting friction is the single most common source of avoidable delay "+
-				"reported by engineers who are new to the account. Plan the extra review time "+
-				"into any estimate involving %s, and raise it explicitly with the customer's "+
-				"counterpart rather than assuming it will be absorbed silently.\n",
-			t.topic, t.reason, t.topic, t.extra, t.topic)
+		fmt.Fprintf(&b, "On the Initech account, %s %s. In practice this means new engineers "+
+			"should assume %s is not automatic and should confirm it directly rather than "+
+			"guess, since %s.\n", t.topic, t.reason, t.topic, t.extra)
 	}
 	return b.String()
 }
 
-// initechPages is the "client-initech" scope: a shared compute/storage baseline, a B-series
-// VM gotcha, and the one deliberately oversize page the task brief calls for.
+// initechPages is the "client-initech" scope: Initech's worker fleet, email delivery, and
+// frontend build knowledge.
 func initechPages() []page {
 	return []page{
 		{
-			UID: uid(33), Slug: "initech-shared-compute-baseline", Type: "state", Scope: "client-initech",
-			Title: "Initech shared compute baseline",
-			Tags:  []string{"customer/initech", "layer/compute", "layer/storage"},
-			AsOf:  "2026-08-05",
+			UID: uid(33), Slug: "initech-shared-worker-fleet", Type: "state", Scope: "client-initech",
+			Title: "Initech shared worker fleet",
+			Tags:  []string{"customer/initech", "layer/queue", "layer/backend", "vendor/rabbitmq", "vendor/docker"},
+			AsOf:  "2026-07-15",
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "All workloads run on B-series VMs backed by one shared storage account"},
-				{ID: "c2", Status: "active", Text: "Storage account consolidation reduced monthly cost by roughly twelve percent"},
+				{ID: "c1", Status: "active", Text: "One RabbitMQ-backed worker fleet processes every Initech background job type"},
+				{ID: "c2", Status: "active", Text: "Workers run as Docker containers on a fixed baseline instance size"},
 			},
 			Status: "active", Owner: "Leo Ferreira", LastVerified: "2026-09-01",
-			Body: "Initech's compute baseline standardizes on B-series VMs against one shared " +
-				"storage account, per [[initech-consolidate-storage-into-shared-account]] and " +
-				"[[initech-standardize-on-b-series-vms]].\n",
+			Body: "The shared fleet runs every Initech background job type on a fixed baseline Docker instance size. [[initech-standardize-burstable-worker-fleet]] records the decision to move this baseline onto burstable instances.\n",
 		},
 		{
-			UID: uid(34), Slug: "initech-vm-extension-timeout-on-resize", Type: "gotcha", Scope: "client-initech",
-			Title: "VM extension install times out during a concurrent resize",
-			Tags:  []string{"customer/initech", "layer/compute"},
+			UID: uid(34), Slug: "initech-barrel-import-defeats-tree-shaking", Type: "gotcha", Scope: "client-initech",
+			Title: "A barrel import defeats tree-shaking in the admin dashboard bundle",
+			Tags:  []string{"customer/initech", "layer/frontend"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Resizing a VM while an extension install is in flight times it out at ninety seconds"},
-				{ID: "c2", Status: "active", Text: "The extension shows as failed but the underlying install often still completed"},
+				{ID: "c1", Status: "active", Text: "The admin dashboard imports its whole UI kit through one barrel index file"},
+				{ID: "c2", Status: "active", Text: "The bundler cannot prove any single export from a barrel file is unused, so it keeps the entire kit"},
+				{ID: "c3", Status: "active", Text: "Switching one page to import only the three components it actually uses cut that page's bundle by more than half"},
 			},
-			Status: "active", Owner: "Leo Ferreira", LastVerified: "2026-09-10",
-			Body: "Starting a resize while a VM extension install is still running causes the " +
-				"extension agent to time out at ninety seconds and report failure, even though " +
-				"the install frequently finished underneath it. Always wait for extension " +
-				"status to settle before resizing.\n",
+			Status: "active", Owner: "Leo Ferreira", LastVerified: "2026-09-13",
+			Body: "The admin dashboard pulls its whole UI kit through a single barrel index file. A bundler cannot prove any individual export from a barrel file is dead code, so it keeps the entire kit in every page that imports from it, no matter how few components that page actually renders.\n\nSwitching one heavy page to import only its three actually-used components directly cut that page's JS bundle by more than half. This has not yet been rolled out across the rest of the dashboard.\n",
 		},
 		{
-			UID: uid(35), Slug: "initech-standardize-on-b-series-vms", Type: "decision", Scope: "client-initech",
-			Title: "Standardize Initech workloads on B-series VMs",
-			Tags:  []string{"customer/initech", "layer/compute"},
+			UID: uid(35), Slug: "initech-standardize-burstable-worker-fleet", Type: "decision", Scope: "client-initech",
+			Title: "Standardize the worker fleet on burstable instances",
+			Tags:  []string{"customer/initech", "layer/queue", "layer/infra"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "B-series burstable VMs replace the prior mixed D-series and B-series fleet"},
-				{ID: "c2", Status: "active", Text: "CPU credit exhaustion under sustained load is the known tradeoff"},
+				{ID: "c1", Status: "active", Text: "The worker fleet baseline moves from fixed-size instances to burstable ones"},
+				{ID: "c2", Status: "active", Text: "Burstable instances accumulate CPU credit during idle periods to cover short processing bursts"},
 			},
 			Status: "active", Owner: "Leo Ferreira", LastVerified: "2026-08-28",
-			Body: "Standardized on B-series burstable VMs for cost, accepting the credit " +
-				"exhaustion tradeoff tracked in [[initech-b-series-cpu-credit-exhaustion]]. " +
-				"[[initech-vm-extension-timeout-on-resize]] applies to any B-series resize the " +
-				"same as it did to the prior fleet.\n",
+			Body: "Standardized [[initech-shared-worker-fleet]] on burstable instances so idle-period CPU credit covers short processing bursts instead of over-provisioning a larger fixed baseline. [[initech-worker-fleet-cpu-credit-exhaustion]] tracks where this has not fully held up.\n",
 		},
 		{
-			UID: uid(36), Slug: "initech-consolidate-storage-into-shared-account", Type: "decision", Scope: "client-initech",
-			Title: "Consolidate Initech storage into one shared account",
-			Tags:  []string{"customer/initech", "layer/storage"},
+			UID: uid(36), Slug: "initech-consolidate-email-into-shared-sendgrid", Type: "decision", Scope: "client-initech",
+			Title: "Consolidate Initech's transactional email onto a shared SendGrid account",
+			Tags:  []string{"customer/initech", "layer/email", "vendor/sendgrid"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Six per-workload storage accounts consolidated into one shared account"},
-				{ID: "c2", Status: "active", Text: "New containers are provisioned into the shared account by default"},
+				{ID: "c1", Status: "active", Text: "Every Initech service sends transactional email through one shared SendGrid account instead of its own"},
+				{ID: "c2", Status: "active", Text: "Each service gets its own subaccount and verified sending domain within the shared account"},
 			},
-			Status: "active", Owner: "Leo Ferreira", LastVerified: "2026-08-29",
-			Body: "Consolidated six per-workload storage accounts into the shared baseline in " +
-				"[[initech-shared-compute-baseline]]. New containers now provision into the " +
-				"shared account by default per " +
-				"[[initech-provision-new-app-storage-container]].\n",
+			Status: "active", Owner: "Leo Ferreira", LastVerified: "2026-08-10",
+			Body: "Consolidated onto one shared SendGrid account with per-service subaccounts and verified sending domains, so no service has to manage its own provider relationship. [[initech-provision-app-email-under-shared-account]] provisions a new service's subaccount.\n",
 		},
 		{
-			UID: uid(37), Slug: "initech-provision-new-app-storage-container", Type: "procedure", Scope: "client-initech",
-			Title: "Provision a new app storage container for Initech",
-			Tags:  []string{"customer/initech", "layer/storage"},
+			UID: uid(37), Slug: "initech-provision-app-email-under-shared-account", Type: "procedure", Scope: "client-initech",
+			Title: "Provision a new app's email under the shared SendGrid account",
+			Tags:  []string{"customer/initech", "layer/email", "vendor/sendgrid"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Create the container inside the shared storage account, never a new account"},
-				{ID: "c2", Status: "active", Text: "Apply the standard lifecycle rule template before the first upload"},
+				{ID: "c1", Status: "active", Text: "A new service requests a subaccount and a verified sending domain before its first send"},
+				{ID: "c2", Status: "active", Text: "Domain verification must complete before the service's first send is attempted, not in parallel with it"},
 			},
-			Status: "active", Owner: "Leo Ferreira", LastVerified: "2026-09-02",
-			Body: "1. Create the container inside the shared account from " +
-				"[[initech-consolidate-storage-into-shared-account]] — never provision a new " +
-				"standalone account.\n" +
-				"2. Apply the standard lifecycle rule template.\n" +
-				"3. Confirm the workload's VM is on the B-series baseline from " +
-				"[[initech-standardize-on-b-series-vms]] before pointing it at the new " +
-				"container.\n",
+			Status: "active", Owner: "Leo Ferreira", LastVerified: "2026-08-12",
+			Body: "1. Request a subaccount under [[initech-consolidate-email-into-shared-sendgrid]].\n2. Verify the sending domain and wait for confirmation before attempting any send.\n3. Confirm the suppression list behavior with a test send to a known-good address.\n",
 		},
 		{
-			UID: uid(38), Slug: "initech-b-series-cpu-credit-exhaustion", Type: "issue", Scope: "client-initech",
-			Title: "B-series CPU credit exhaustion under sustained batch load",
-			Tags:  []string{"customer/initech", "layer/compute"},
+			UID: uid(38), Slug: "initech-worker-fleet-cpu-credit-exhaustion", Type: "issue", Scope: "client-initech",
+			Title: "Worker fleet burns through CPU credit during sustained batch runs",
+			Tags:  []string{"customer/initech", "layer/queue", "layer/infra"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Sustained batch load exhausts CPU credits within forty minutes on B2ms"},
-				{ID: "c2", Status: "active", Text: "Once exhausted, throughput drops to the baseline performance floor"},
+				{ID: "c1", Status: "active", Text: "A sustained batch run longer than twenty minutes exhausts a burstable worker's accumulated CPU credit"},
+				{ID: "c2", Status: "active", Text: "Once credit is exhausted, the instance throttles to its baseline performance mid-job"},
 			},
-			Status: "open", Owner: "Leo Ferreira", LastVerified: "2026-09-13",
-			Body: "Batch workloads running sustained load on B2ms instances exhaust their CPU " +
-				"credit balance within about forty minutes, after which throughput drops to the " +
-				"instance's baseline floor. This is the tradeoff accepted in " +
-				"[[initech-standardize-on-b-series-vms]]; " +
-				"[[initech-batch-job-backlog-2026-06]] is the incident it caused.\n",
+			Status: "open", Owner: "Leo Ferreira", LastVerified: "2026-09-12",
+			Body: "Sustained batch runs longer than twenty minutes exhaust a burstable instance's accumulated CPU credit under [[initech-standardize-burstable-worker-fleet]], throttling performance mid-job rather than at a predictable boundary.\n",
 		},
 		{
-			UID: uid(39), Slug: "initech-batch-job-backlog-2026-06", Type: "incident", Scope: "client-initech",
-			Title: "Initech batch job backlog, June 2026",
-			Tags:  []string{"customer/initech", "layer/compute", "layer/observability"},
+			UID: uid(39), Slug: "initech-worker-backlog-2026-06", Type: "incident", Scope: "client-initech",
+			Title: "Initech worker backlog, June 2026",
+			Tags:  []string{"customer/initech", "layer/queue"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Nightly batch queue backed up four hours after credit exhaustion throttled throughput"},
-				{ID: "c2", Status: "active", Text: "A D-series exception was granted for the two largest batch workloads"},
+				{ID: "c1", Status: "active", Text: "A batch backlog crossed the alert threshold and paged on-call directly rather than waiting for business hours"},
+				{ID: "c2", Status: "active", Text: "Root cause was CPU credit exhaustion on the worker fleet during an unusually long batch run"},
+				{ID: "c3", Status: "active", Text: "The backlog drained fully within two hours of the page"},
 			},
-			Status: "monitoring", Owner: "Leo Ferreira", LastVerified: "2026-09-13",
-			Body: "The nightly batch queue backed up roughly four hours after " +
-				"[[initech-b-series-cpu-credit-exhaustion]] throttled several concurrent jobs to " +
-				"baseline performance. A D-series exception was granted for the two largest " +
-				"workloads per [[initech-standardize-on-b-series-vms]]; backlog burn-down is " +
-				"still being monitored.\n",
+			Status: "resolved", Owner: "Leo Ferreira", LastVerified: "2026-06-20",
+			Body: "The backlog escalation behavior described in the onboarding notes caught this: a batch backlog crossed the alert threshold and paged on-call directly. Root cause was [[initech-worker-fleet-cpu-credit-exhaustion]] during an unusually long batch run; the backlog drained within two hours.\n",
 		},
 		{
 			UID: uid(40), Slug: "initech-account-onboarding-notes", Type: "note", Scope: "client-initech",
-			Title: "Initech account onboarding notes for new engineers",
-			Tags:  []string{"customer/initech"},
+			Title: "Initech account onboarding notes",
+			Tags:  []string{"customer/initech", "layer/queue", "layer/email", "layer/infra"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "New engineers must read this before touching the Initech environment"},
-				{ID: "c2", Status: "active", Text: "The account has local process exceptions the general onboarding material omits"},
+				{ID: "c1", Status: "active", Text: "This note is the single required read before a new engineer touches the Initech account"},
 			},
-			Status: "active", Owner: "Leo Ferreira", LastVerified: "2026-08-30",
+			Status: "active", Owner: "Leo Ferreira", LastVerified: "2026-09-14",
 			Body: oversizeBody(),
 		},
 	}

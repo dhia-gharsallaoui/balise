@@ -1,151 +1,115 @@
 package main
 
-// globexCrossScopeDanglingComment explains, the same way defaults/fixtures/globex-er-circuit.md
-// already does, why globex-expressroute-circuit-v2's body wikilink to expressroute-transit is
-// deliberately left pointing at a slug that cannot resolve: link resolution
-// (internal/vault/links.go) is scoped strictly to (scope, slug), so a bare wikilink can never
-// cross from client-globex into work, no matter how unambiguous the target name looks to a
-// human reader.
+// globexCrossScopeDanglingComment documents a deliberate, permanent gotcha in the generated
+// vault: the body below links to [[shared-event-bus]], the work-scope page this replicated
+// pipeline is really built on top of, but wikilink resolution never crosses scope boundaries
+// -- only slug lookup within the same scope -- so the link is left dangling on purpose rather
+// than quietly rewritten to something that would resolve but mean something else.
 const globexCrossScopeDanglingComment = "" +
-	"# The body's [[expressroute-transit]] wikilink names work/expressroute-transit, the shared\n" +
-	"# platform page this circuit really is a specific deployment of — but link resolution never\n" +
-	"# crosses scope boundaries, only slug lookup within this same scope, so the link is left\n" +
-	"# dangling on purpose rather than quietly rewritten to something that would resolve but mean\n" +
-	"# something else.\n"
+	"# The body's [[shared-event-bus]] wikilink names work/shared-event-bus, the platform-wide\n" +
+	"# Kafka cluster this replicated pipeline actually runs on top of -- but link resolution\n" +
+	"# never crosses scope boundaries, only slug lookup within this same scope, so the link is\n" +
+	"# left dangling on purpose rather than quietly rewritten to something that would resolve\n" +
+	"# but mean something else.\n"
 
-// globexPages is the "client-globex" scope: ExpressRoute circuit history plus an AKS/storage
-// pair of gotchas, one issue and one incident tying the two together.
+// globexPages is the "client-globex" scope: Globex's order event pipeline and SSO knowledge.
 func globexPages() []page {
 	return []page{
 		{
-			UID: uid(25), Slug: "globex-expressroute-circuit-v1", Type: "state", Scope: "client-globex",
-			Title:        "Globex ExpressRoute circuit, v1",
-			SupersededBy: "globex-expressroute-circuit-v2",
-			Tags:         []string{"customer/globex", "layer/network", "vendor/azure/expressroute"},
-			AsOf:         "2026-05-10",
+			UID: uid(25), Slug: "globex-order-events-pipeline-single-broker", Type: "state", Scope: "client-globex",
+			Title:        "Globex order events pipeline, single-broker baseline",
+			SupersededBy: "globex-order-events-pipeline-replicated",
+			Tags:         []string{"customer/globex", "layer/queue", "vendor/kafka"},
+			AsOf:         "2026-07-01",
 			Claims: []claim{
-				{ID: "c1", Status: "superseded", AsOf: "2026-08-30", Text: "Single 1 Gbps circuit terminating at the regional peering location"},
-				{ID: "c2", Status: "superseded", AsOf: "2026-08-30", Text: "No secondary circuit; a single peering failure was a full outage risk"},
+				{ID: "c1", Status: "superseded", AsOf: "2026-08-20", Text: "Order events published to a single, unreplicated Kafka broker dedicated to Globex"},
+				{ID: "c2", Status: "superseded", AsOf: "2026-08-20", Text: "A broker restart during a deploy caused a visible gap in order event delivery"},
 			},
-			Status: "superseded", Owner: "Sana Idris", LastVerified: "2026-08-30",
-			Body: "Globex's original single-circuit setup, replaced by " +
-				"[[globex-expressroute-circuit-v2]] once the dual-circuit standard applied to " +
-				"tier 2+ clients.\n",
+			Status: "superseded", Owner: "Sana Idris", LastVerified: "2026-08-20",
+			Body: "The original Globex order events pipeline ran on a single, unreplicated Kafka broker. Superseded by [[globex-order-events-pipeline-replicated]] after a broker restart caused a visible delivery gap.\n",
 		},
 		{
-			UID: uid(26), Slug: "globex-expressroute-circuit-v2", Type: "state", Scope: "client-globex",
-			Title:   "Globex ExpressRoute circuit, v2",
-			Aliases: []string{"globex-er-v2"},
 			Comment: globexCrossScopeDanglingComment,
-			About:   []string{"globex-expressroute-circuit-v1"},
-			Tags:    []string{"customer/globex", "layer/network", "vendor/azure/expressroute"},
-			AsOf:    "2026-08-30",
+			UID:     uid(26), Slug: "globex-order-events-pipeline-replicated", Type: "state", Scope: "client-globex",
+			Title:   "Globex order events pipeline, replicated",
+			Aliases: []string{"globex-order-events-v2"},
+			Tags:    []string{"customer/globex", "layer/queue", "vendor/kafka"},
+			AsOf:    "2026-08-20",
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Dual 1 Gbps circuits across two peering locations, active-active"},
-				{ID: "c2", Status: "active", Text: "Each circuit alone can carry full production load if the other fails"},
-				{ID: "c3", Status: "active", Text: "Deployed under the platform's dual-circuit standard for tier 2+ clients"},
+				{ID: "c1", Status: "active", Text: "Order events now publish to a three-broker replicated Kafka cluster dedicated to Globex"},
+				{ID: "c2", Status: "active", Text: "The cluster runs on top of the same shared event bus platform every other tenant uses"},
 			},
-			Status: "active", Owner: "Sana Idris", LastVerified: "2026-09-09",
-			Body: "Current circuit pair, replacing [[globex-expressroute-circuit-v1]]. It is a " +
-				"specific deployment of the general [[expressroute-transit]] service — a " +
-				"cross-scope link left deliberately dangling until the spec defines a " +
-				"qualified-link form. " +
-				"[[globex-expressroute-circuit-capacity-upgrade]] is the procedure used to grow " +
-				"either circuit's bandwidth without a peering location change.\n",
+			Status: "active", Owner: "Sana Idris", LastVerified: "2026-09-10",
+			Body: "Current baseline: a three-broker replicated cluster, migrated off [[globex-order-events-pipeline-single-broker]]. It runs on top of [[shared-event-bus]], the same platform-wide Kafka deployment every tenant shares.\n",
 		},
 		{
-			UID: uid(27), Slug: "globex-storage-account-immutability-lock-blocks-lifecycle", Type: "gotcha", Scope: "client-globex",
-			Title: "Immutability lock on a storage account blocks lifecycle deletes",
-			Tags:  []string{"customer/globex", "layer/storage"},
+			UID: uid(27), Slug: "globex-sso-nested-group-claim-mapping-drops-groups", Type: "gotcha", Scope: "client-globex",
+			Title: "Okta SSO nested group claim mapping drops nested groups",
+			Tags:  []string{"customer/globex", "layer/identity", "layer/security", "vendor/okta"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "A time-based immutability lock silently blocks lifecycle-rule deletes too"},
-				{ID: "c2", Status: "active", Text: "The lifecycle rule shows as applied even though nothing was deleted"},
-				{ID: "c3", Status: "active", Text: "Locked blobs age out only when the immutability period itself expires"},
+				{ID: "c1", Status: "active", Text: "Okta's group claim mapping only enumerates a user's direct group memberships"},
+				{ID: "c2", Status: "active", Text: "A user who only belongs to a nested subgroup gets no group claim at all on login"},
+				{ID: "c3", Status: "active", Text: "Manually flattening the nested groups into direct memberships is the only confirmed workaround today"},
 			},
-			Status: "active", Owner: "Sana Idris", LastVerified: "2026-09-06",
-			Body: "A storage account under a time-based immutability policy blocks deletes from " +
-				"lifecycle rules the same way it blocks manual deletes, but the portal still " +
-				"shows the rule as successfully applied, which makes the block easy to miss. " +
-				"[[globex-storage-lifecycle-rules-not-running]] is the resulting issue.\n",
+			Status: "active", Owner: "Sana Idris", LastVerified: "2026-09-11",
+			Body: "Okta's group claim mapping enumerates only a user's direct group memberships, not memberships inherited through a nested subgroup. A user who only belongs to a nested subgroup receives no group claim at login at all, which [[globex-sso-nested-group-users-missing-access]] tracks the access-loss impact of.\n",
 		},
 		{
-			UID: uid(28), Slug: "globex-aks-ingress-cert-renewal-race", Type: "gotcha", Scope: "client-globex",
-			Title: "AKS ingress cert renewal races the load balancer health check",
-			Tags:  []string{"customer/globex", "customer/globex/consumer", "layer/compute", "vendor/azure/aks"},
+			UID: uid(28), Slug: "globex-api-gateway-cert-renewal-races-health-check", Type: "gotcha", Scope: "client-globex",
+			Title: "API gateway certificate renewal races the health check",
+			Tags:  []string{"customer/globex/consumer", "layer/backend", "layer/security", "vendor/nginx"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "New cert loads before the health check re-probes, briefly serving a mismatch"},
-				{ID: "c2", Status: "active", Text: "Window is under thirty seconds but wide enough to fail strict TLS clients"},
+				{ID: "c1", Status: "active", Text: "The nginx-based gateway reloads its TLS certificate on a fixed nightly timer"},
+				{ID: "c2", Status: "active", Text: "The load balancer's health check can hit the gateway mid-reload and see a stale certificate for a few seconds"},
+				{ID: "c3", Status: "active", Text: "A health check failure during that window pulls a healthy gateway instance out of rotation"},
 			},
-			Status: "active", Owner: "Sana Idris", LastVerified: "2026-09-07",
-			Body: "The ingress controller reloads a renewed certificate before the load " +
-				"balancer's health check has re-probed the backend, so for a short window a " +
-				"strict TLS client can see a certificate mismatch. " +
-				"[[globex-move-to-managed-cert-renewal]] is the fix in progress; " +
-				"[[globex-ingress-502-window-2026-07]] is the incident that first surfaced it.\n",
+			Status: "active", Owner: "Sana Idris", LastVerified: "2026-09-01",
+			Body: "The nginx-based API gateway reloads its TLS certificate on a fixed nightly timer. The load balancer's health check can catch the gateway mid-reload and briefly see a stale certificate, pulling an otherwise healthy instance out of rotation. [[globex-api-gateway-502-window-2026-07]] is the incident this produced.\n",
 		},
 		{
 			UID: uid(29), Slug: "globex-move-to-managed-cert-renewal", Type: "decision", Scope: "client-globex",
-			Title: "Move Globex ingress certs to managed renewal",
-			Tags:  []string{"customer/globex", "layer/compute", "vendor/azure/aks"},
+			Title: "Move API gateway certificate renewal to a managed rotation service",
+			Tags:  []string{"customer/globex", "layer/backend", "layer/security"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Managed renewal staggers reload behind a health-check confirmation step"},
-				{ID: "c2", Status: "active", Text: "Removes the manual renewal race described in the ingress cert gotcha"},
+				{ID: "c1", Status: "active", Text: "Certificate renewal moves off the nightly cron timer onto a managed rotation service with graceful reload"},
+				{ID: "c2", Status: "active", Text: "The managed service drains connections before swapping the certificate instead of reloading in place"},
 			},
-			Status: "active", Owner: "Sana Idris", LastVerified: "2026-09-08",
-			Body: "Replacing manual certificate renewal with a managed flow that waits for a " +
-				"health-check confirmation before switching the load balancer to the new " +
-				"certificate, closing the race in " +
-				"[[globex-aks-ingress-cert-renewal-race]].\n",
+			Status: "active", Owner: "Sana Idris", LastVerified: "2026-09-02",
+			Body: "Decided to replace the nightly cron-based renewal behind [[globex-api-gateway-cert-renewal-races-health-check]] with a managed rotation service that drains connections before swapping the certificate.\n",
 		},
 		{
-			UID: uid(30), Slug: "globex-expressroute-circuit-capacity-upgrade", Type: "procedure", Scope: "client-globex",
-			Title: "Upgrade Globex ExpressRoute circuit capacity",
-			Tags:  []string{"customer/globex", "layer/network", "vendor/azure/expressroute"},
+			UID: uid(30), Slug: "globex-kafka-broker-capacity-upgrade", Type: "procedure", Scope: "client-globex",
+			Title: "Upgrade Globex's Kafka broker capacity",
+			Tags:  []string{"customer/globex", "layer/queue", "vendor/kafka"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Request the bandwidth upgrade on one circuit at a time, never both together"},
-				{ID: "c2", Status: "active", Text: "Confirm traffic has failed over to the untouched circuit before starting"},
+				{ID: "c1", Status: "active", Text: "A capacity upgrade adds one broker at a time and waits for full replication before adding the next"},
+				{ID: "c2", Status: "active", Text: "Partition reassignment runs during Globex's lowest-traffic window, never during business hours"},
 			},
-			Status: "active", Owner: "Sana Idris", LastVerified: "2026-09-09",
-			Body: "1. Confirm [[globex-expressroute-circuit-v2]] (or its predecessor, " +
-				"[[globex-expressroute-circuit-v1]], if still mid-migration) is healthy on both " +
-				"circuits.\n" +
-				"2. Fail traffic over to one circuit.\n" +
-				"3. Request the bandwidth upgrade on the idle circuit.\n" +
-				"4. Repeat for the other circuit once the first upgrade is confirmed.\n\n" +
-				"This same one-circuit-at-a-time pattern is what a hub-wide capacity upgrade " +
-				"would use if it becomes necessary; see " +
-				"[[globex-storage-lifecycle-rules-not-running]] for an unrelated storage issue " +
-				"raised during the same capacity review.\n",
+			Status: "active", Owner: "Sana Idris", LastVerified: "2026-09-05",
+			Body: "1. Add one broker to [[globex-order-events-pipeline-replicated]] at a time.\n2. Wait for full replication before adding the next.\n3. Run partition reassignment only during Globex's lowest-traffic window.\n",
 		},
 		{
-			UID: uid(31), Slug: "globex-storage-lifecycle-rules-not-running", Type: "issue", Scope: "client-globex",
-			Title: "Storage lifecycle rules are not actually deleting anything",
-			Tags:  []string{"customer/globex", "layer/storage"},
+			UID: uid(31), Slug: "globex-sso-nested-group-users-missing-access", Type: "issue", Scope: "client-globex",
+			Title: "Users in nested Okta groups are missing expected access",
+			Tags:  []string{"customer/globex", "layer/identity", "layer/security"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Three accounts under immutability lock have zero lifecycle-rule deletes in 90 days"},
-				{ID: "c2", Status: "active", Text: "Storage cost for those accounts has grown eight percent month over month"},
+				{ID: "c1", Status: "active", Text: "Several Globex users report missing access that their nested group membership should grant"},
+				{ID: "c2", Status: "active", Text: "Support currently resolves each case manually by adding the user to a direct group as a workaround"},
 			},
-			Status: "open", Owner: "Sana Idris", LastVerified: "2026-09-06",
-			Body: "Three storage accounts have had zero successful lifecycle-rule deletes in " +
-				"the last 90 days despite showing the rule as applied, matching the block " +
-				"described in [[globex-storage-account-immutability-lock-blocks-lifecycle]]. " +
-				"Storage cost on those accounts is climbing as a result.\n",
+			Status: "open", Owner: "Sana Idris", LastVerified: "2026-09-11",
+			Body: "Direct fallout of [[globex-sso-nested-group-claim-mapping-drops-groups]]: users in nested-only groups are missing access their membership should grant. Each case is currently resolved manually.\n",
 		},
 		{
-			UID: uid(32), Slug: "globex-ingress-502-window-2026-07", Type: "incident", Scope: "client-globex",
-			Title: "Globex ingress 502 window, July 2026",
-			Tags:  []string{"customer/globex", "customer/globex/consumer", "layer/compute", "layer/observability"},
+			UID: uid(32), Slug: "globex-api-gateway-502-window-2026-07", Type: "incident", Scope: "client-globex",
+			Title: "API gateway 502 window, July 2026",
+			Tags:  []string{"customer/globex/consumer", "layer/backend", "layer/security", "layer/observability"},
 			Claims: []claim{
-				{ID: "c1", Status: "active", Text: "Consumer-facing ingress returned intermittent 502s for eighteen minutes"},
-				{ID: "c2", Status: "active", Text: "Root cause traced to the cert renewal race, not a backend failure"},
-				{ID: "c3", Status: "active", Text: "Circuit capacity was ruled out early; both ExpressRoute circuits were healthy"},
+				{ID: "c1", Status: "active", Text: "A four-minute window of intermittent 502 responses followed the nightly certificate reload"},
+				{ID: "c2", Status: "active", Text: "Health check failures during the reload pulled two of four gateway instances out of rotation at once"},
+				{ID: "c3", Status: "active", Text: "The remaining two instances could not absorb full traffic, producing visible 502s for real requests"},
 			},
-			Status: "resolved", Owner: "Sana Idris", LastVerified: "2026-09-07",
-			Body: "The consumer-facing ingress returned intermittent 502s for eighteen minutes. " +
-				"Root cause was [[globex-aks-ingress-cert-renewal-race]], not a backend or " +
-				"network problem — [[globex-expressroute-circuit-v2]] was confirmed healthy on " +
-				"both circuits throughout. [[globex-move-to-managed-cert-renewal]] is the " +
-				"follow-up fix.\n",
+			Status: "resolved", Owner: "Sana Idris", LastVerified: "2026-08-01",
+			Body: "A four-minute window of intermittent 502s followed the nightly certificate reload described in [[globex-api-gateway-cert-renewal-races-health-check]]. Health check failures pulled two of four instances out of rotation at once, and the remaining two could not absorb full traffic.\n",
 		},
 	}
 }

@@ -8,36 +8,138 @@ import (
 
 // verbatimDefaultFiles are copied byte-for-byte from the real repo's defaults directory into
 // the demo's own defaults directory. Every one of these is already fully generic — the eight
-// type schemas, the agent-order list, the declared-scopes list, and the vendor facet name no
-// real client, so there is nothing in them to genericize.
+// type schemas, the agent-order list, and the declared-scopes list name no real client, so
+// there is nothing in them to genericize. facets/vendor.yaml is deliberately absent from this
+// list: the real repo's copy only declares azure/fortinet, so the demo owns its own copy (see
+// demoVendorFacet below) instead of shipping Azure vendor names into unrelated content.
 var verbatimDefaultFiles = []string{
 	"types/decision.yaml", "types/gotcha.yaml", "types/incident.yaml", "types/issue.yaml",
 	"types/memory.yaml", "types/note.yaml", "types/procedure.yaml", "types/state.yaml",
-	"order.yaml", "scopes.yaml", "facets/vendor.yaml",
+	"order.yaml", "scopes.yaml",
 }
 
 // exampleAsRealCopy is one ".example.yaml" sibling copied in as the real file the demo's
 // defaults directory needs.
 type exampleAsRealCopy struct{ src, dst string }
 
-// exampleAsRealFiles: the real defaults/tenants.yaml, defaults/spaces.yaml and
-// defaults/facets/customer.yaml (a real file always wins over its .example.yaml sibling per
-// internal/registry/configfallback.go's realOrExample) hold the owner's actual client
-// codenames and must never reach anything published — so the demo vault gets its own
-// defaults directory built from the already-generic ".example.yaml" siblings instead.
+// exampleAsRealFiles: the real defaults/tenants.yaml and defaults/facets/customer.yaml (a real
+// file always wins over its .example.yaml sibling per internal/registry/configfallback.go's
+// realOrExample) hold the owner's actual client codenames and must never reach anything
+// published — so the demo vault gets its own defaults directory built from the already-generic
+// ".example.yaml" siblings instead. spaces.yaml is deliberately not copied this way: the real
+// repo's spaces.example.yaml is built around the Azure/IaC tag vocabulary, not this generator's
+// own layer/vendor/customer tags, so the demo owns its own copy instead (see demoSpaces below).
 var exampleAsRealFiles = []exampleAsRealCopy{
 	{"tenants.example.yaml", "tenants.yaml"},
-	{"spaces.example.yaml", "spaces.yaml"},
 	{"facets/customer.example.yaml", "facets/customer.yaml"},
 }
 
-// demoLayerFacet is the demo's own facets/layer.yaml: the real one's values (network,
-// compute, storage, identity, observability, iac, security) plus "agents" and "fabric" — the
-// two values defaults/spaces.example.yaml's own filters reference that the shipped layer
-// facet does not yet define. Adding them here, in the demo's own copy, means this generator
-// never has to touch the real defaults/facets/layer.yaml.
+// demoLayerFacet is the demo's own facets/layer.yaml, matching the tag vocabulary this
+// generator's content and demoSpaces below were written against. It intentionally does not
+// try to reuse the real repo's shipped layer facet (network, compute, storage, iac, ... —
+// Azure/IaC oriented) since the demo's subject matter is unrelated backend/frontend/platform
+// engineering; owning this file here means the generator never has to touch the real
+// defaults/facets/layer.yaml.
 const demoLayerFacet = `name: layer
-values: {network: {}, compute: {}, storage: {}, identity: {}, observability: {}, iac: {}, security: {}, agents: {}, fabric: {}}
+values: {backend: {}, frontend: {}, database: {}, cache: {}, queue: {}, ci: {}, release: {}, observability: {}, security: {}, identity: {}, payments: {}, email: {}, infra: {}, agents: {}}
+`
+
+// demoVendorFacet is the demo's own facets/vendor.yaml. The real repo's copy only declares
+// azure and fortinet, neither of which this content uses, so the demo owns a full replacement
+// naming the vendors its pages actually reference, with a couple of light aliases for the
+// vendors most likely to be typed differently.
+const demoVendorFacet = `name: vendor
+values: {postgres: {aliases: [postgresql, pg]}, redis: {}, kafka: {}, rabbitmq: {aliases: [amqp]}, stripe: {}, sendgrid: {}, okta: {}, github_actions: {aliases: [gha]}, docker: {}, nginx: {}, datadog: {}, pagerduty: {}}
+`
+
+// demoSpaces is the demo's own spaces.yaml, replacing the real repo's Azure/IaC-themed
+// defaults/spaces.example.yaml with a space tree over this generator's own layer/vendor tags.
+// Each scope root's children are verified non-empty against the actual generated content in
+// content_work.go/content_acme.go/content_globex.go/content_initech.go.
+const demoSpaces = `
+- name: Platform
+  scope: work
+  filter:
+    tags: []
+  children:
+    - name: Backend
+      filter:
+        tags: ["layer/backend"]
+    - name: Database
+      filter:
+        tags: ["layer/database"]
+    - name: Caching
+      filter:
+        tags: ["layer/cache"]
+    - name: Event Streaming
+      filter:
+        tags: ["layer/queue"]
+    - name: CI/CD
+      filter:
+        tags: ["layer/ci"]
+    - name: Security
+      filter:
+        tags: ["layer/security"]
+    - name: Observability
+      filter:
+        tags: ["layer/observability"]
+    - name: Infra
+      filter:
+        tags: ["layer/infra"]
+    - name: Agents
+      filter:
+        tags: ["layer/agents"]
+- name: Globex
+  scope: client-globex
+  filter:
+    tags: []
+  children:
+    - name: Event Streaming
+      filter:
+        tags: ["layer/queue"]
+    - name: Identity
+      filter:
+        tags: ["layer/identity"]
+    - name: Backend
+      filter:
+        tags: ["layer/backend"]
+    - name: Security
+      filter:
+        tags: ["layer/security"]
+    - name: Observability
+      filter:
+        tags: ["layer/observability"]
+- name: Acme
+  scope: client-acme
+  filter:
+    tags: []
+  children:
+    - name: Payments
+      filter:
+        tags: ["layer/payments"]
+    - name: Feature Flags
+      filter:
+        tags: ["layer/release"]
+    - name: Observability
+      filter:
+        tags: ["layer/observability"]
+- name: Initech
+  scope: client-initech
+  filter:
+    tags: []
+  children:
+    - name: Workers & Queue
+      filter:
+        tags: ["layer/queue"]
+    - name: Frontend
+      filter:
+        tags: ["layer/frontend"]
+    - name: Email
+      filter:
+        tags: ["layer/email"]
+    - name: Infra
+      filter:
+        tags: ["layer/infra"]
 `
 
 // writeDefaults assembles outDefaults (the demo's own defaults directory, wired via
@@ -61,6 +163,22 @@ func writeDefaults(sourceDefaults, outDefaults string) error {
 	}
 	if err := os.WriteFile(layerPath, []byte(demoLayerFacet), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", layerPath, err)
+	}
+
+	vendorPath := filepath.Join(outDefaults, "facets", "vendor.yaml")
+	if err := os.MkdirAll(filepath.Dir(vendorPath), 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", filepath.Dir(vendorPath), err)
+	}
+	if err := os.WriteFile(vendorPath, []byte(demoVendorFacet), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", vendorPath, err)
+	}
+
+	spacesPath := filepath.Join(outDefaults, "spaces.yaml")
+	if err := os.MkdirAll(filepath.Dir(spacesPath), 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", filepath.Dir(spacesPath), err)
+	}
+	if err := os.WriteFile(spacesPath, []byte(demoSpaces), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", spacesPath, err)
 	}
 	return nil
 }
