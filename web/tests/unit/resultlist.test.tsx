@@ -22,7 +22,7 @@ const page = (slug: string, type: Group["type"]) => ({
 
 // Fixture only — never re-sort alphabetically. This deliberately lists gotcha
 // before state to prove ResultList re-orders by the fixed canonical order
-// (state, decision, gotcha, procedure, issue, incident, note, entity), not by
+// (state, decision, gotcha, procedure, issue, incident, note, memory), not by
 // the order it was handed.
 const GROUPS: Group[] = [
   { type: "gotcha", count: 1, pages: [page("g", "gotcha")] },

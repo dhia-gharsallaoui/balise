@@ -63,7 +63,7 @@ describe("readGraphPalette", () => {
   it("returns every TypeName token and every known role token", () => {
     const palette = readGraphPalette(document.createElement("div"));
     expect(Object.keys(palette.types).sort()).toEqual(
-      ["state", "decision", "gotcha", "procedure", "issue", "incident", "entity", "note"].sort(),
+      ["state", "decision", "gotcha", "procedure", "issue", "incident", "memory", "note"].sort(),
     );
     expect(Object.keys(palette.roles).sort()).toEqual(
       ["link", "about", "specializes", "supersedes", "derives", "owns"].sort(),

@@ -1,2 +1,2 @@
 # defaults/order.yaml — the agent order from 04 section 11 step 3, most specific first.
-agent_order: [state, decision, gotcha, procedure, issue, incident, note, entity, log, raw]
+agent_order: [state, decision, gotcha, procedure, issue, incident, note, memory, log, raw]

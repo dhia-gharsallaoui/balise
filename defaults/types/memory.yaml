@@ -1,0 +1,8 @@
+name: memory
+description: An agent's append-only daily rollup, written by remember rather than hand-authored
+folder: memory/
+traits: [log]
+max_tokens: 6000
+fields:
+  agent: {type: string}
+  date:  {type: date}

@@ -2,13 +2,12 @@ name: state
 description: The current, superseding value of something that changes over time
 folder: state/
 traits: [indexed, temporal, stateful]
-max_tokens: 1200
+max_tokens: 4000
 max_claims: 6
 staleness_days: 30
 fields:
   as_of:         {type: date, required: true}
   status:        {type: enum, values: [active, superseded, retired], default: active}
-  instance_of:   {type: ref, to: entity, role: specializes}
   superseded_by: {type: ref, to: state, role: supersedes}
   about:         {type: "ref[]", to: any, role: about}
   identity:      {type: identity}

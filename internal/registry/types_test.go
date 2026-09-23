@@ -15,7 +15,7 @@ func TestLoadsTheEightShippedTypes(t *testing.T) {
 	reg, err := registry.Load(defaults)
 	require.NoError(t, err)
 	require.Equal(t, []string{
-		"decision", "entity", "gotcha", "incident", "issue", "note", "procedure", "state",
+		"decision", "gotcha", "incident", "issue", "memory", "note", "procedure", "state",
 	}, reg.Names())
 }
 

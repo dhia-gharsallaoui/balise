@@ -6,7 +6,7 @@ package main
 func workPages() []page {
 	return []page{
 		{
-			UID: uid(1), Slug: "expressroute-transit", Type: "entity", Scope: "work",
+			UID: uid(1), Slug: "expressroute-transit", Type: "note", Scope: "work",
 			Title:   "ExpressRoute Transit",
 			Aliases: []string{"er-transit"},
 			Tags:    []string{"vendor/azure/expressroute", "layer/network"},
@@ -24,7 +24,7 @@ func workPages() []page {
 				"current capacity picture.\n",
 		},
 		{
-			UID: uid(2), Slug: "shared-aks-fleet", Type: "entity", Scope: "work",
+			UID: uid(2), Slug: "shared-aks-fleet", Type: "note", Scope: "work",
 			Title:   "Shared AKS Fleet",
 			Aliases: []string{"aks-fleet"},
 			Tags:    []string{"vendor/azure/aks", "layer/compute"},
@@ -44,7 +44,6 @@ func workPages() []page {
 		{
 			UID: uid(3), Slug: "aks-fleet-node-image-2026-06", Type: "state", Scope: "work",
 			Title:        "AKS fleet node image, June 2026 baseline",
-			InstanceOf:   "shared-aks-fleet",
 			SupersededBy: "aks-fleet-node-image-2026-09",
 			Tags:         []string{"layer/compute", "vendor/azure/aks"},
 			AsOf:         "2026-06-02",
@@ -53,41 +52,40 @@ func workPages() []page {
 				{ID: "c2", Status: "superseded", AsOf: "2026-09-01", Text: "Contains the cgroup v1 default that later caused pod eviction flapping"},
 			},
 			Status: "superseded", Owner: "Marcus Webb", LastVerified: "2026-09-01",
-			Body: "This was the fleet's node image baseline from the June ring rollout through " +
-				"early September. It is superseded by " +
+			Body: "This was the [[shared-aks-fleet]]'s node image baseline from the June ring " +
+				"rollout through early September. It is superseded by " +
 				"[[aks-fleet-node-image-2026-09]], which fixes the cgroup default noted below.\n",
 		},
 		{
 			UID: uid(4), Slug: "aks-fleet-node-image-2026-09", Type: "state", Scope: "work",
-			Title:      "AKS fleet node image, September 2026 baseline",
-			InstanceOf: "shared-aks-fleet",
-			About:      []string{"aks-node-pool-recreate-drops-taints"},
-			Tags:       []string{"layer/compute", "vendor/azure/aks"},
-			AsOf:       "2026-09-08",
+			Title: "AKS fleet node image, September 2026 baseline",
+			About: []string{"aks-node-pool-recreate-drops-taints"},
+			Tags:  []string{"layer/compute", "vendor/azure/aks"},
+			AsOf:  "2026-09-08",
 			Claims: []claim{
 				{ID: "c1", Status: "active", Text: "Ubuntu 22.04 image with kernel 6.2, switched to cgroup v2 by default"},
 				{ID: "c2", Status: "active", Text: "Rolled out fleet-wide over three weekly rings ending September 8"},
 				{ID: "c3", Status: "active", Text: "Node pool recreate still drops custom taints; see linked gotcha"},
 			},
 			Status: "active", Owner: "Marcus Webb", LastVerified: "2026-09-08",
-			Body: "Current fleet baseline. Fixes the cgroup v1 pod eviction flapping from " +
-				"[[aks-fleet-node-image-2026-06]], but does not change the node pool recreate " +
-				"behaviour tracked in [[aks-node-pool-recreate-drops-taints]].\n",
+			Body: "Current baseline for the [[shared-aks-fleet]]. Fixes the cgroup v1 pod " +
+				"eviction flapping from [[aks-fleet-node-image-2026-06]], but does not change " +
+				"the node pool recreate behaviour tracked in " +
+				"[[aks-node-pool-recreate-drops-taints]].\n",
 		},
 		{
 			UID: uid(5), Slug: "aks-node-pool-recreate-drops-taints", Type: "gotcha", Scope: "work",
-			Title:  "Recreating an AKS node pool drops custom taints",
-			Vendor: "shared-aks-fleet",
-			Tags:   []string{"layer/compute", "vendor/azure/aks"},
+			Title: "Recreating an AKS node pool drops custom taints",
+			Tags:  []string{"layer/compute", "vendor/azure/aks"},
 			Claims: []claim{
 				{ID: "c1", Status: "active", Text: "Node pool recreate resets taints to the pool default, dropping custom ones"},
 				{ID: "c2", Status: "active", Text: "Re-apply taints via the fleet update run, not the base pool manifest"},
 				{ID: "c3", Status: "active", Text: "Affects every fleet member, confirmed across three separate ring rollouts"},
 			},
 			Status: "active", Owner: "Marcus Webb", LastVerified: "2026-09-10",
-			Body: "Any node pool recreate operation — including the fleet's own ring rollout — " +
-				"resets that pool's taints to whatever the base pool manifest declares, silently " +
-				"dropping any taint added by hand afterwards.\n\n" +
+			Body: "Any node pool recreate operation on the [[shared-aks-fleet]] — including its " +
+				"own ring rollout — resets that pool's taints to whatever the base pool manifest " +
+				"declares, silently dropping any taint added by hand afterwards.\n\n" +
 				"Workaround: re-add the taint through the fleet update run's post-step hook so it " +
 				"survives the next recreate, rather than patching the live pool directly.\n",
 		},

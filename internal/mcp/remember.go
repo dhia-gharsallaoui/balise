@@ -10,6 +10,7 @@ import (
 	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"gopkg.in/yaml.v3"
 
 	"github.com/dhia/balise/internal/store"
 	"github.com/dhia/balise/internal/vault"
@@ -76,9 +77,31 @@ func (d *deps) remember(ctx context.Context, req *sdk.CallToolRequest, in Rememb
 		existing = nil
 	}
 
-	entry := formatMemoryEntry(existing, tok.Name, when, in.Text)
-	newContent := make([]byte, 0, len(existing)+len(entry))
-	newContent = append(newContent, existing...)
+	slug := vault.SlugFromFilename(path.Base(p))
+	entry := formatMemoryEntry(when, in.Text)
+
+	// A brand-new day's file gets its frontmatter (defaults/types/memory.yaml: type
+	// memory, fields agent + date) written exactly once, right here, before the first
+	// entry -- this is the fix for the gap indexer/pipeline.go's
+	// orDefault(fm.Type, "note") papered over: with no frontmatter at all, every memory
+	// file used to index as a plain "note". Every later remember call for the same day
+	// only appends a bullet to the tail of the file, so this header, once written, is
+	// never touched again.
+	var newContent []byte
+	if len(existing) == 0 {
+		header, err := renderMemoryHeader(memoryMeta{
+			UID: vault.NewUID(), Slug: slug, Type: "memory", Scope: in.Scope,
+			Title: fmt.Sprintf("%s -- %s", tok.Name, when.UTC().Format("2006-01-02")),
+			Agent: tok.Name, Date: when.UTC().Format("2006-01-02"),
+		}, tok.Name, when)
+		if err != nil {
+			recordAudit(ctx, d.pool, tok.ID, "remember", []string{in.Scope}, in.Text, nil, 0, start)
+			return nil, out, fmt.Errorf("render memory header: %w", err)
+		}
+		newContent = append(newContent, header...)
+	} else {
+		newContent = append(newContent, existing...)
+	}
 	newContent = append(newContent, entry...)
 
 	// The author is exactly "agent:<name>", per the task brief -- no angle
@@ -96,7 +119,7 @@ func (d *deps) remember(ctx context.Context, req *sdk.CallToolRequest, in Rememb
 	}
 
 	out.Path = p
-	out.Slug = vault.SlugFromFilename(path.Base(p))
+	out.Slug = slug
 
 	// last_used_at is recorded once, centrally, by authenticate() at the
 	// top of this call -- see auth.go's doc comment on authenticate for
@@ -108,14 +131,45 @@ func (d *deps) remember(ctx context.Context, req *sdk.CallToolRequest, in Rememb
 	return nil, out, nil
 }
 
-// formatMemoryEntry renders one dated, timestamped entry to append to a
-// memory file. If existing is empty (a brand-new day's file), a level-1
-// heading names the agent and date first.
-func formatMemoryEntry(existing []byte, agent string, when time.Time, text string) []byte {
-	var b strings.Builder
-	if len(existing) == 0 {
-		fmt.Fprintf(&b, "# %s -- %s\n\n", agent, when.UTC().Format("2006-01-02"))
+// formatMemoryEntry renders one dated, timestamped entry to append to a memory file. The
+// file's own frontmatter and level-1 heading are a separate concern, written once by
+// renderMemoryHeader when the file is created -- this function only ever adds one bullet
+// line, whether that is the first entry of the day or the fifth.
+func formatMemoryEntry(when time.Time, text string) []byte {
+	return []byte(fmt.Sprintf("- **%s UTC** %s\n", when.UTC().Format("15:04:05"), text))
+}
+
+// memoryMeta is the frontmatter written once, at file creation, for a memory page --
+// defaults/types/memory.yaml's own fields (agent, date) plus the generic uid/slug/type/
+// scope/title every other page in this vault carries. It deliberately mirrors
+// internal/api/sources.go's sourceMeta (a plain struct encoded with a yaml.Encoder, not a
+// hand-built vault.Page/yaml.Node) -- the same small pattern internal/importer's renderMeta
+// also uses, reproduced here rather than factored into a shared helper across three
+// unrelated packages for ten lines of code.
+type memoryMeta struct {
+	UID   string `yaml:"uid"`
+	Slug  string `yaml:"slug"`
+	Type  string `yaml:"type"`
+	Scope string `yaml:"scope"`
+	Title string `yaml:"title"`
+	Agent string `yaml:"agent"`
+	Date  string `yaml:"date"`
+}
+
+// renderMemoryHeader encodes meta as YAML frontmatter, fenced by "---" lines, followed by
+// the level-1 "# agent -- date" heading formatMemoryEntry's first bullet used to follow
+// directly -- so a file written under the new code looks exactly like one written under
+// the old code, with one YAML block inserted above it.
+func renderMemoryHeader(meta memoryMeta, agent string, when time.Time) (string, error) {
+	var sb strings.Builder
+	encoder := yaml.NewEncoder(&sb)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(meta); err != nil {
+		return "", fmt.Errorf("encode frontmatter: %w", err)
 	}
-	fmt.Fprintf(&b, "- **%s UTC** %s\n", when.UTC().Format("15:04:05"), text)
-	return []byte(b.String())
+	if err := encoder.Close(); err != nil {
+		return "", fmt.Errorf("close encoder: %w", err)
+	}
+	heading := fmt.Sprintf("# %s -- %s\n\n", agent, when.UTC().Format("2006-01-02"))
+	return "---\n" + sb.String() + "---\n" + heading, nil
 }

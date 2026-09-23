@@ -25,7 +25,7 @@ type claim struct {
 type page struct {
 	UID   string
 	Slug  string
-	Type  string // decision | entity | gotcha | incident | issue | note | procedure | state
+	Type  string // decision | gotcha | incident | issue | memory | note | procedure | state
 	Scope string
 	Title string
 
@@ -38,13 +38,9 @@ type page struct {
 	Comment string
 
 	// State-only fields (defaults/types/state.yaml's fields:).
-	InstanceOf   string
 	SupersededBy string
 	About        []string
 	AsOf         string
-
-	// Gotcha-only field (defaults/types/gotcha.yaml's fields:).
-	Vendor string
 
 	Tags   []string
 	Claims []claim
@@ -57,20 +53,20 @@ type page struct {
 }
 
 // folderFor maps a page type to its defaults/types/<type>.yaml folder — the same mapping
-// every defaults/types/*.yaml file declares (decisions/, entities/, gotchas/, incidents/,
-// issues/, notes/, procedures/, state/).
+// every defaults/types/*.yaml file declares (decisions/, gotchas/, incidents/, issues/,
+// memory/, notes/, procedures/, state/).
 func folderFor(pageType string) string {
 	switch pageType {
 	case "decision":
 		return "decisions"
-	case "entity":
-		return "entities"
 	case "gotcha":
 		return "gotchas"
 	case "incident":
 		return "incidents"
 	case "issue":
 		return "issues"
+	case "memory":
+		return "memory"
 	case "note":
 		return "notes"
 	case "procedure":
@@ -116,18 +112,12 @@ func (p page) render() string {
 		b.WriteString(p.Comment)
 	}
 	if p.Type == "state" {
-		if p.InstanceOf != "" {
-			fmt.Fprintf(&b, "instance_of: %s\n", p.InstanceOf)
-		}
 		if p.SupersededBy != "" {
 			fmt.Fprintf(&b, "superseded_by: %s\n", p.SupersededBy)
 		}
 		if len(p.About) > 0 {
 			fmt.Fprintf(&b, "about: [%s]\n", strings.Join(p.About, ", "))
 		}
-	}
-	if p.Type == "gotcha" && p.Vendor != "" {
-		fmt.Fprintf(&b, "vendor: %s\n", p.Vendor)
 	}
 	fmt.Fprintf(&b, "tags: [%s]\n", strings.Join(p.Tags, ", "))
 	if p.Type == "state" {

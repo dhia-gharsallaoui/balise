@@ -1,15 +1,17 @@
 package main
 
 // globexCrossScopeDanglingComment explains, the same way defaults/fixtures/globex-er-circuit.md
-// already does, why globex-expressroute-circuit-v2's instance_of is deliberately left pointing
-// at a slug that cannot resolve: link resolution (internal/vault/links.go) is scoped strictly
-// to (scope, slug), so a bare ref can never cross from client-globex into work, no matter how
-// unambiguous the target name looks to a human reader.
+// already does, why globex-expressroute-circuit-v2's body wikilink to expressroute-transit is
+// deliberately left pointing at a slug that cannot resolve: link resolution
+// (internal/vault/links.go) is scoped strictly to (scope, slug), so a bare wikilink can never
+// cross from client-globex into work, no matter how unambiguous the target name looks to a
+// human reader.
 const globexCrossScopeDanglingComment = "" +
-	"# instance_of names work/expressroute-transit, the shared platform entity this circuit is\n" +
-	"# really an instance of — but ref resolution never crosses scope boundaries, only slug\n" +
-	"# lookup within this same scope, so the reference is left dangling on purpose rather than\n" +
-	"# quietly rewritten to something that would resolve but mean something else.\n"
+	"# The body's [[expressroute-transit]] wikilink names work/expressroute-transit, the shared\n" +
+	"# platform page this circuit really is a specific deployment of — but link resolution never\n" +
+	"# crosses scope boundaries, only slug lookup within this same scope, so the link is left\n" +
+	"# dangling on purpose rather than quietly rewritten to something that would resolve but mean\n" +
+	"# something else.\n"
 
 // globexPages is the "client-globex" scope: ExpressRoute circuit history plus an AKS/storage
 // pair of gotchas, one issue and one incident tying the two together.
@@ -32,20 +34,22 @@ func globexPages() []page {
 		},
 		{
 			UID: uid(26), Slug: "globex-expressroute-circuit-v2", Type: "state", Scope: "client-globex",
-			Title:      "Globex ExpressRoute circuit, v2",
-			Aliases:    []string{"globex-er-v2"},
-			Comment:    globexCrossScopeDanglingComment,
-			InstanceOf: "expressroute-transit",
-			About:      []string{"globex-expressroute-circuit-v1"},
-			Tags:       []string{"customer/globex", "layer/network", "vendor/azure/expressroute"},
-			AsOf:       "2026-08-30",
+			Title:   "Globex ExpressRoute circuit, v2",
+			Aliases: []string{"globex-er-v2"},
+			Comment: globexCrossScopeDanglingComment,
+			About:   []string{"globex-expressroute-circuit-v1"},
+			Tags:    []string{"customer/globex", "layer/network", "vendor/azure/expressroute"},
+			AsOf:    "2026-08-30",
 			Claims: []claim{
 				{ID: "c1", Status: "active", Text: "Dual 1 Gbps circuits across two peering locations, active-active"},
 				{ID: "c2", Status: "active", Text: "Each circuit alone can carry full production load if the other fails"},
 				{ID: "c3", Status: "active", Text: "Deployed under the platform's dual-circuit standard for tier 2+ clients"},
 			},
 			Status: "active", Owner: "Sana Idris", LastVerified: "2026-09-09",
-			Body: "Current circuit pair, replacing [[globex-expressroute-circuit-v1]]. " +
+			Body: "Current circuit pair, replacing [[globex-expressroute-circuit-v1]]. It is a " +
+				"specific deployment of the general [[expressroute-transit]] service — a " +
+				"cross-scope link left deliberately dangling until the spec defines a " +
+				"qualified-link form. " +
 				"[[globex-expressroute-circuit-capacity-upgrade]] is the procedure used to grow " +
 				"either circuit's bandwidth without a peering location change.\n",
 		},

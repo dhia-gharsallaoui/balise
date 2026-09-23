@@ -11,8 +11,8 @@ import (
 // type schemas, the agent-order list, the declared-scopes list, and the vendor facet name no
 // real client, so there is nothing in them to genericize.
 var verbatimDefaultFiles = []string{
-	"types/decision.yaml", "types/entity.yaml", "types/gotcha.yaml", "types/incident.yaml",
-	"types/issue.yaml", "types/note.yaml", "types/procedure.yaml", "types/state.yaml",
+	"types/decision.yaml", "types/gotcha.yaml", "types/incident.yaml", "types/issue.yaml",
+	"types/memory.yaml", "types/note.yaml", "types/procedure.yaml", "types/state.yaml",
 	"order.yaml", "scopes.yaml", "facets/vendor.yaml",
 }
 

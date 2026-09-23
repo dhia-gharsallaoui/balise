@@ -1,6 +1,6 @@
 export type ClaimStatus = "active" | "superseded" | "resolved" | "retired" | "open";
 export type TypeName =
-  | "state" | "decision" | "gotcha" | "procedure" | "issue" | "incident" | "note" | "entity";
+  | "state" | "decision" | "gotcha" | "procedure" | "issue" | "incident" | "note" | "memory";
 
 export interface Claim {
   text: string;

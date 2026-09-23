@@ -14,8 +14,8 @@ const TYPE_TOKENS: Record<TypeName, string> = {
   procedure: "--type-procedure",
   issue: "--type-issue",
   incident: "--type-incident",
-  entity: "--type-entity",
   note: "--type-note",
+  memory: "--type-memory",
 };
 
 const ROLE_TOKENS: Record<string, string> = {
@@ -71,8 +71,8 @@ const FALLBACK: GraphPalette = {
     procedure: "GrayText",
     issue: "GrayText",
     incident: "GrayText",
-    entity: "GrayText",
     note: "GrayText",
+    memory: "GrayText",
   },
   roles: {
     link: "GrayText",

@@ -1,7 +1,7 @@
 ---
 uid: 01JAAAAAAAAAAAAAAAAAAAAAA4
 slug: expressroute
-type: entity
+type: note
 scope: work
 title: Azure ExpressRoute
 tags: [vendor/azure/expressroute, layer/network]
@@ -13,5 +13,5 @@ owner: dhia
 last_verified: 2026-08-30
 ---
 Azure ExpressRoute extends an on-premises network into Microsoft's backbone without
-going over the public internet. Customer circuits, such as Globex's, specialize this
-general entity.
+going over the public internet. Customer circuits, such as Globex's, are specific
+deployments of this general service.

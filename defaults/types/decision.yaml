@@ -2,6 +2,6 @@ name: decision
 description: A choice that was made, with the reasoning and alternatives considered
 folder: decisions/
 traits: [indexed, temporal, cited]
-max_tokens: 1200
+max_tokens: 2500
 max_claims: 6
 staleness_days: 180

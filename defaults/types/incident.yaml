@@ -2,5 +2,5 @@ name: incident
 description: A specific occurrence of something going wrong, with its timeline and impact
 folder: incidents/
 traits: [indexed, temporal, cited, stateful]
-max_tokens: 1200
+max_tokens: 4000
 max_claims: 6

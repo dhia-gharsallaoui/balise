@@ -310,7 +310,7 @@
 .type-dot[data-type="procedure"] { background: var(--type-procedure); }
 .type-dot[data-type="issue"] { background: var(--type-issue); }
 .type-dot[data-type="incident"] { background: var(--type-incident); }
-.type-dot[data-type="entity"] { background: var(--type-entity); }
+.type-dot[data-type="memory"] { background: var(--type-memory); }
 
 .kn-count {
   color: var(--ink-3);
@@ -419,7 +419,7 @@
 .type-chip[data-type="procedure"] { color: var(--type-procedure); }
 .type-chip[data-type="issue"] { color: var(--type-issue); }
 .type-chip[data-type="incident"] { color: var(--type-incident); }
-.type-chip[data-type="entity"] { color: var(--type-entity); }
+.type-chip[data-type="memory"] { color: var(--type-memory); }
 
 /* ---- Reading view: a dedicated, full-width page ---- */
 /* Supersedes the old 400px `.kn-right` third column (see reading-view-report.md and the

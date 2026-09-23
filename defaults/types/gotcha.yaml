@@ -2,12 +2,11 @@ name: gotcha
 description: A system or vendor behaves in a surprising way, regardless of who found it
 folder: gotchas/
 traits: [indexed, cited, temporal]
-max_tokens: 1200
+max_tokens: 2500
 max_claims: 6
 staleness_days: 365
 claim_rules: {max_words: 15, must_be_statement: true}
 fields:
-  vendor:        {type: ref, to: entity, role: about}
   retracted_at:  {type: date}
   owner:         {type: string}
   last_verified: {type: date}

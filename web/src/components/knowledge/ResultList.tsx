@@ -3,12 +3,12 @@ import { EmptyState } from "../ui/EmptyState";
 import { PageRow } from "./PageRow";
 
 // Group order is fixed by the API (state, decision, gotcha, procedure, issue,
-// incident, note, entity) — this rank table is a defensive no-op for browse
+// incident, note, memory) — this rank table is a defensive no-op for browse
 // data (already arrives in this order) and the actual fix for search data
 // (grouped through a Map in Knowledge.tsx, whose insertion order tracks first
 // occurrence in the hit list, not the canonical type order). It must never
 // re-sort alphabetically.
-const ORDER = ["state", "decision", "gotcha", "procedure", "issue", "incident", "note", "entity"];
+const ORDER = ["state", "decision", "gotcha", "procedure", "issue", "incident", "note", "memory"];
 
 const rank = (type: string) => {
   const index = ORDER.indexOf(type);

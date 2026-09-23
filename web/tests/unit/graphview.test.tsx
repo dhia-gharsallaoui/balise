@@ -12,7 +12,7 @@ function baseGraph() {
     nodes: [
       { uid: "a", slug: "a", title: "Page A is the centre of this graph", type: "gotcha", scope: "work" },
       { uid: "b", slug: "b", title: "Page B", type: "state", scope: "work" },
-      { uid: "c", slug: "c", title: LONG_TITLE, type: "entity", scope: "work" },
+      { uid: "c", slug: "c", title: LONG_TITLE, type: "memory", scope: "work" },
       { uid: "d", slug: "d", title: "Page D", type: "state", scope: "work" },
       { uid: "iso", slug: "iso", title: "Isolated page", type: "note", scope: "work" },
     ],

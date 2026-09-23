@@ -19,11 +19,11 @@ const SETTINGS: SettingsResponse = {
       stale_after_days: 0,
     },
     {
-      name: "entity",
-      description: "A person, team, vendor or system this vault talks about.",
-      folder: "entities",
+      name: "gotcha",
+      description: "A system or vendor behaves in a surprising way, regardless of who found it.",
+      folder: "gotchas",
       count: 12,
-      fields: ["vendor", "owner"],
+      fields: ["retracted_at", "owner"],
       stale_after_days: 365,
     },
   ],
@@ -103,7 +103,7 @@ describe("SettingsScreen", () => {
     render(<SettingsScreen />);
     expect(await screen.findByText("incident")).toBeTruthy();
     expect(screen.getByText("4 pages")).toBeTruthy();
-    expect(screen.getByText("entity")).toBeTruthy();
+    expect(screen.getByText("gotcha")).toBeTruthy();
     expect(screen.getByText("12 pages")).toBeTruthy();
     expect(screen.getByText(/no staleness rule/i)).toBeTruthy();
     expect(screen.getByText(/stale after 365 days/i)).toBeTruthy();

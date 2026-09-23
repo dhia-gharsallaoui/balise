@@ -4,9 +4,9 @@ slug: globex-er-v1
 type: state
 scope: client-globex
 title: Globex ExpressRoute circuit, v1 (500 Mbps)
-# No instance_of here: globex-er-circuit.md already carries the one deliberate cross-scope
-# instance_of in this fixture set (see the comment there). A second copy of the same
-# unresolvable pattern would not exercise anything new.
+# No cross-scope wikilink here: globex-er-circuit.md already carries the one deliberate
+# cross-scope dangling link in this fixture set (see the comment there). A second copy
+# of the same unresolvable pattern would not exercise anything new.
 tags: [customer/globex, vendor/azure/expressroute, layer/network]
 as_of: 2026-08-01
 claims:

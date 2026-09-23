@@ -169,8 +169,8 @@ func TestSettingsReturnsRealTypesTagsRelationsAndScopes(t *testing.T) {
 		BodyMD: "body", BodyHash: "h1", GitVersion: "v1",
 	}))
 	require.NoError(t, q.UpsertDocument(ctx, store.Document{
-		UID: "u-2", Slug: "acme-contract", Scope: clientScope, Type: "entity",
-		Path: clientScope + "/entities/acme-contract.md", Title: "Acme contract",
+		UID: "u-2", Slug: "acme-contract", Scope: clientScope, Type: "gotcha",
+		Path: clientScope + "/gotchas/acme-contract.md", Title: "Acme contract",
 		Tags: []string{"customer.acme"}, Status: "active", Owner: "dhia",
 		BodyMD: "body", BodyHash: "h2", GitVersion: "v1",
 	}))
@@ -197,12 +197,12 @@ func TestSettingsReturnsRealTypesTagsRelationsAndScopes(t *testing.T) {
 		staleByName[ty.Name] = ty.StaleAfterDays
 	}
 	require.Equal(t, 1, byName["incident"])
-	require.Equal(t, 1, byName["entity"])
+	require.Equal(t, 1, byName["gotcha"])
 	require.Equal(t, 0, byName["decision"])
 
 	// Structure: Types carry defaults/types/*.yaml's own real staleness_days — 0 for a type
 	// that declares none (incident), never a fabricated placeholder.
-	require.Equal(t, 365, staleByName["entity"])
+	require.Equal(t, 365, staleByName["gotcha"])
 	require.Equal(t, 0, staleByName["incident"])
 
 	// Structure: facet groups (defaults/facets/ has exactly customer, layer, vendor).

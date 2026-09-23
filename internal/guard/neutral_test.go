@@ -20,7 +20,7 @@ import (
 )
 
 var typeNames = []string{
-	"gotcha", "decision", "state", "procedure", "incident", "issue", "entity",
+	"gotcha", "decision", "state", "procedure", "incident", "issue", "memory",
 }
 
 var enginePackages = []string{

@@ -109,7 +109,7 @@ Three deployments in parallel failed; the same three serialized succeeded.
 ```
 
 Eight types ship by default — `state`, `decision`, `gotcha`, `procedure`, `issue`, `incident`,
-`note`, `entity` — each with its own fields and staleness rule. They are YAML in
+`note`, `memory` — each with its own fields and staleness rule. They are YAML in
 `defaults/types/`, not code; add your own.
 
 ---

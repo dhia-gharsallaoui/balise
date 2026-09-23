@@ -2,6 +2,6 @@ name: procedure
 description: A repeatable set of steps for accomplishing a task
 folder: procedures/
 traits: [indexed, procedural]
-max_tokens: 1200
+max_tokens: 4000
 max_claims: 6
 staleness_days: 90

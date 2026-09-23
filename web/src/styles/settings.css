@@ -322,8 +322,8 @@
 .settings-dot[data-type="procedure"] { background: var(--type-procedure); }
 .settings-dot[data-type="issue"] { background: var(--type-issue); }
 .settings-dot[data-type="incident"] { background: var(--type-incident); }
-.settings-dot[data-type="entity"] { background: var(--type-entity); }
 .settings-dot[data-type="note"] { background: var(--type-note); }
+.settings-dot[data-type="memory"] { background: var(--type-memory); }
 
 /* Scopes have no per-name colour token (unlike page types) — client scopes get the accent
    colour so the client/non-client distinction reads at a glance, without inventing a new
