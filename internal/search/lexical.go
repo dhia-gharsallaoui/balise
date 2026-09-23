@@ -30,11 +30,25 @@ func init() {
 }
 
 // AssessCoverage returns "ok" when at least one hit shares a meaningful term with the
-// query, and "low" otherwise.
+// query, or when the top-ranked hit was surfaced by the semantic arm, and "low" otherwise.
+//
+// The semantic-arm check exists because literal term overlap is blind to paraphrase: a
+// query like "charged twice" can have its correct answer ranked #1 by cosine similarity
+// (e.g. a claim that says "charge" and "duplicate", never "charged" or "twice" -- terms()
+// is exact-token, not stemmed) while sharing zero exact tokens with any returned hit's
+// title or matched claims, which the term-overlap loop below reads as "no coverage" even
+// though the ranking is correct. store.SearchClaims's semantic arm already vets its own
+// evidence before contributing any rows at all (see semanticStrongEnough in
+// internal/store/queries.go) -- a hit whose Why is "semantic" already cleared that bar, so
+// trusting hits[0] here does not let weak evidence through a side door; it just stops a
+// second, purely-lexical check from overruling a verdict the semantic arm already earned.
 func AssessCoverage(query string, hits []store.Hit) string {
 	wanted := terms(query)
 	if len(hits) == 0 || len(wanted) == 0 {
 		return "low"
+	}
+	if hits[0].Why == "semantic" {
+		return "ok"
 	}
 	for _, hit := range hits {
 		text := strings.Join(hit.MatchedClaims, " ")

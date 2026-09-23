@@ -28,6 +28,13 @@ func TestCoverage(t *testing.T) {
 			[]store.Hit{{Title: "Gateway update deletes connections"}}, "ok"},
 		{"short words ignored", "an id",
 			[]store.Hit{{MatchedClaims: []string{"an id is not a term"}}}, "low"},
+		{"paraphrased top hit trusted via semantic arm", "charged twice",
+			[]store.Hit{{Why: "semantic", MatchedClaims: []string{"Stripe webhook retries duplicate the charge"}}}, "ok"},
+		{"semantic credit only applies to the top hit", "charged twice",
+			[]store.Hit{
+				{Why: "lexical", MatchedClaims: []string{"Unrelated lexical match"}},
+				{Why: "semantic", MatchedClaims: []string{"Stripe webhook retries duplicate the charge"}},
+			}, "low"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, search.AssessCoverage(tc.query, tc.hits))

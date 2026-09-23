@@ -273,6 +273,121 @@ func TestSemanticCoverageFloorSuppressesWeakMatches(t *testing.T) {
 	require.Empty(t, hits, "mean top-5-doc similarity 0.10 is below semanticFloor and should return nothing")
 }
 
+// TestSemanticFewClaimsSingleStrongMatchNotDiluted is the "few claims" regression fixture:
+// a corpus where a topic is covered by exactly one excellent document (0.55) and a handful
+// of only loosely-related ones (0.12-0.15). The mean across the top semanticFloorDocs (5)
+// documents is (0.55+0.15+0.14+0.13+0.12)/5 = 0.218, BELOW semanticFloor (0.25) -- the exact
+// corpus-size-flavoured dilution failure this task described: a genuinely correct top-1
+// match suppressed because a small candidate pool forces averaging in weaker neighbours to
+// reach semanticFloorDocs. Before semanticTop1Floor existed, this fixture returned no hits
+// at all despite doc "strong-match" being the unambiguous right answer at rank 1.
+//
+// The companion offTopic query (same documents, second vector component) proves the fix
+// does not just let everything through: a uniformly weak match (top-1 0.06, mean ~0.046)
+// still correctly returns nothing.
+func TestSemanticFewClaimsSingleStrongMatchNotDiluted(t *testing.T) {
+	pool := testutil.NewDB(t)
+	ctx := context.Background()
+	work := store.NewQueries(pool, store.Scopes{"work"})
+
+	const model = "test-model"
+	// {good, bad}: good is this doc's cosine similarity to the wellMatched query vector
+	// below; bad is its similarity to the offTopic query vector. doc 0 is the one genuine
+	// match; docs 1-4 are filler that would drag a mean-only floor below semanticFloor.
+	goodBad := [][2]float64{
+		{0.55, 0.05},
+		{0.15, 0.06},
+		{0.14, 0.05},
+		{0.13, 0.04},
+		{0.12, 0.03},
+	}
+	var strongMatchSlug string
+	for i, gb := range goodBad {
+		uid := fmt.Sprintf("thin-doc-%d", i)
+		slug := fmt.Sprintf("thin-topic-%d", i)
+		if i == 0 {
+			strongMatchSlug = slug
+		}
+		seedDoc(t, work, func(d *store.Document) {
+			d.UID, d.Slug, d.Path = uid, slug, "work/gotchas/"+slug+".md"
+		})
+		claimText := fmt.Sprintf("Synthetic thin-corpus claim content number %d", i)
+		require.NoError(t, work.ReplaceClaims(ctx, uid, []store.Claim{
+			{ClaimID: "c1", Ord: 0, Text: claimText, Status: "active"},
+		}))
+		vector := vec3(gb[0], gb[1])
+		require.NoError(t, work.UpsertClaimEmbeddings(ctx, model, len(vector), []store.ClaimEmbeddingWrite{
+			{Hash: embed.Hash(claimText), Vector: embed.EncodeVector(vector)},
+		}))
+	}
+
+	wellMatched := &store.SemanticQuery{Model: model, Vector: []float32{1, 0, 0}}
+	hits, err := work.SearchClaims(ctx, "zzz_no_lexical_or_trigram_match_zzz", false, 30, wellMatched)
+	require.NoError(t, err)
+	require.NotEmpty(t, hits, "a single 0.55 top-1 match must clear semanticTop1Floor even though the mean of all 5 documents (0.218) is below semanticFloor")
+	require.Equal(t, strongMatchSlug, hits[0].Slug, "the single genuine match must rank first, not be dropped or outranked by filler")
+
+	offTopic := &store.SemanticQuery{Model: model, Vector: []float32{0, 1, 0}}
+	hits, err = work.SearchClaims(ctx, "zzz_no_lexical_or_trigram_match_zzz", false, 30, offTopic)
+	require.NoError(t, err)
+	require.Empty(t, hits, "a uniformly weak match (top-1 0.06, mean 0.046) must still return nothing")
+}
+
+// TestSemanticManyClaimsStillRequiresMeanEvidence is the "many claims" regression fixture:
+// a corpus 4x the size of the one above (20 documents), where the topic is broadly and
+// consistently covered rather than concentrated in one standout document (top-5 scores
+// 0.27-0.32, no single one clearing semanticTop1Floor on its own). This proves rule (a) -- the
+// original mean-based mechanism -- still carries the weight it always did at a larger scale,
+// and that adding rule (b) (the single-strong-match floor) did not quietly turn evidence
+// evaluation into "just check the top hit". The offTopic query, run against the same 20
+// documents, proves a bigger candidate pool does not by itself manufacture a false positive
+// via either rule.
+func TestSemanticManyClaimsStillRequiresMeanEvidence(t *testing.T) {
+	pool := testutil.NewDB(t)
+	ctx := context.Background()
+	work := store.NewQueries(pool, store.Scopes{"work"})
+
+	const model = "test-model"
+	const totalDocs = 20
+	// Top 5 docs (by good score) average (0.32+0.30+0.29+0.28+0.27)/5 = 0.292, clearing
+	// semanticFloor (0.25) but with top-1 (0.32) nowhere near semanticTop1Floor (0.45) --
+	// broad coverage, not a single standout. The remaining 15 are filler well below the
+	// top-5 floor so they cannot join it. bad is uniformly weak across all 20 documents for
+	// the offTopic query: mean and top-1 both stay far under their floors.
+	topFive := []float64{0.32, 0.30, 0.29, 0.28, 0.27}
+	for i := 0; i < totalDocs; i++ {
+		good := 0.15
+		if i < len(topFive) {
+			good = topFive[i]
+		}
+		const bad = 0.08
+
+		uid := fmt.Sprintf("wide-doc-%d", i)
+		slug := fmt.Sprintf("wide-topic-%d", i)
+		seedDoc(t, work, func(d *store.Document) {
+			d.UID, d.Slug, d.Path = uid, slug, "work/gotchas/"+slug+".md"
+		})
+		claimText := fmt.Sprintf("Synthetic wide-corpus claim content number %d", i)
+		require.NoError(t, work.ReplaceClaims(ctx, uid, []store.Claim{
+			{ClaimID: "c1", Ord: 0, Text: claimText, Status: "active"},
+		}))
+		vector := vec3(good, bad)
+		require.NoError(t, work.UpsertClaimEmbeddings(ctx, model, len(vector), []store.ClaimEmbeddingWrite{
+			{Hash: embed.Hash(claimText), Vector: embed.EncodeVector(vector)},
+		}))
+	}
+
+	wellMatched := &store.SemanticQuery{Model: model, Vector: []float32{1, 0, 0}}
+	hits, err := work.SearchClaims(ctx, "zzz_no_lexical_or_trigram_match_zzz", false, 30, wellMatched)
+	require.NoError(t, err)
+	require.NotEmpty(t, hits, "mean top-5-doc similarity 0.292 across 20 documents clears semanticFloor and should return rows")
+
+	offTopic := &store.SemanticQuery{Model: model, Vector: []float32{0, 1, 0}}
+	hits, err = work.SearchClaims(ctx, "zzz_no_lexical_or_trigram_match_zzz", false, 30, offTopic)
+	require.NoError(t, err)
+	require.Empty(t, hits, "a uniformly weak 0.08 match across 20 documents must still return nothing, proving corpus size alone does not manufacture evidence")
+}
+
 // vec3 builds a unit-length 3D vector whose cosine similarity to [1,0,0] is exactly good and
 // to [0,1,0] is exactly bad, letting a test fixture control a claim's similarity to two
 // different query vectors independently -- something a 2D vector cannot do (sin/cos of one
