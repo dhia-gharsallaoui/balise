@@ -41,10 +41,16 @@ type Document struct {
 	Status, Owner                       string
 	Fields                              map[string]any
 	BodyMD, BodyHash, GitVersion        string
-	Tokens, ClaimsCount                 int
-	Historical                          bool
-	CreatedAt, UpdatedAt                *time.Time
-	LastVerified                        *time.Time
+	// TypeFingerprint is registry.Registry.Fingerprint(Type) as of this row's last real
+	// indexing pass — see that method's doc comment for exactly what it covers. The indexer
+	// compares it against the current registry's fingerprint alongside BodyHash and
+	// GitVersion to decide whether a page needs re-evaluation, so a type's limits changing
+	// in defaults/types/*.yaml is not missed just because the page itself did not change.
+	TypeFingerprint      string
+	Tokens, ClaimsCount  int
+	Historical           bool
+	CreatedAt, UpdatedAt *time.Time
+	LastVerified         *time.Time
 }
 
 // Claim is one indexed claim.
@@ -233,8 +239,9 @@ func (q *Queries) UpsertDocument(ctx context.Context, doc Document) error {
 	tag, err := q.pool.Exec(ctx, `
 		insert into documents (uid, slug, scope, type, path, title, aliases, tags, status,
 		                       owner, last_verified, fields, body_md, body_hash, tokens,
-		                       claims_count, historical, git_version, created_at, updated_at)
-		values ($1,$2,$3,$4,$5,$6,$7,$8::text[]::ltree[],$9,$10,$11,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20)
+		                       claims_count, historical, git_version, type_fingerprint,
+		                       created_at, updated_at)
+		values ($1,$2,$3,$4,$5,$6,$7,$8::text[]::ltree[],$9,$10,$11,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 		on conflict (uid) do update set
 		  slug=excluded.slug, scope=excluded.scope, type=excluded.type, path=excluded.path,
 		  title=excluded.title, aliases=excluded.aliases, tags=excluded.tags,
@@ -242,12 +249,13 @@ func (q *Queries) UpsertDocument(ctx context.Context, doc Document) error {
 		  fields=excluded.fields, body_md=excluded.body_md, body_hash=excluded.body_hash,
 		  tokens=excluded.tokens, claims_count=excluded.claims_count,
 		  historical=excluded.historical, git_version=excluded.git_version,
+		  type_fingerprint=excluded.type_fingerprint,
 		  updated_at=excluded.updated_at, indexed_at=now()
-		where documents.scope = any($21::text[])`,
+		where documents.scope = any($22::text[])`,
 		doc.UID, doc.Slug, doc.Scope, doc.Type, doc.Path, doc.Title,
 		orEmpty(doc.Aliases), orEmpty(doc.Tags), nullable(doc.Status), nullable(doc.Owner),
 		doc.LastVerified, fields, doc.BodyMD, doc.BodyHash, doc.Tokens,
-		doc.ClaimsCount, doc.Historical, doc.GitVersion, doc.CreatedAt, doc.UpdatedAt,
+		doc.ClaimsCount, doc.Historical, doc.GitVersion, doc.TypeFingerprint, doc.CreatedAt, doc.UpdatedAt,
 		[]string(q.scopes))
 	if err != nil {
 		return fmt.Errorf("upsert %s: %w", doc.Slug, err)
@@ -388,6 +396,7 @@ func (q *Queries) ListPages(ctx context.Context, filter PageFilter) ([]PageRow, 
 		select d.uid, d.slug, d.scope, d.type, d.path, d.title, d.aliases,
 		       d.tags::text[], coalesce(d.status,''), coalesce(d.owner,''), d.last_verified,
 		       d.body_md, d.body_hash, d.tokens, d.claims_count, d.historical, d.git_version,
+		       d.type_fingerprint,
 		       coalesce((select json_agg(json_build_object(
 		           'claim_id', c.claim_id, 'ord', c.ord, 'text', c.text,
 		           'status', c.status, 'as_of', c.as_of,
@@ -470,6 +479,7 @@ func (q *Queries) GetPage(ctx context.Context, scope, slug string) (*PageRow, er
 		select d.uid, d.slug, d.scope, d.type, d.path, d.title, d.aliases,
 		       d.tags::text[], coalesce(d.status,''), coalesce(d.owner,''), d.last_verified,
 		       d.body_md, d.body_hash, d.tokens, d.claims_count, d.historical, d.git_version,
+		       d.type_fingerprint,
 		       coalesce((select json_agg(json_build_object(
 		           'claim_id', c.claim_id, 'ord', c.ord, 'text', c.text,
 		           'status', c.status, 'as_of', c.as_of,
@@ -680,6 +690,7 @@ func (q *Queries) GetPagesByUIDs(ctx context.Context, uids []string) ([]PageRow,
 		select d.uid, d.slug, d.scope, d.type, d.path, d.title, d.aliases,
 		       d.tags::text[], coalesce(d.status,''), coalesce(d.owner,''), d.last_verified,
 		       d.body_md, d.body_hash, d.tokens, d.claims_count, d.historical, d.git_version,
+		       d.type_fingerprint,
 		       coalesce((select json_agg(json_build_object(
 		           'claim_id', c.claim_id, 'ord', c.ord, 'text', c.text,
 		           'status', c.status, 'as_of', c.as_of,
@@ -1129,7 +1140,7 @@ func scanPageRows(rows pgx.Rows) ([]PageRow, error) {
 		if err := rows.Scan(&row.UID, &row.Slug, &row.Scope, &row.Type, &row.Path, &row.Title,
 			&row.Aliases, &row.Tags, &row.Status, &row.Owner, &row.LastVerified,
 			&row.BodyMD, &row.BodyHash, &row.Tokens, &row.ClaimsCount, &row.Historical,
-			&row.GitVersion, &claimsRaw); err != nil {
+			&row.GitVersion, &row.TypeFingerprint, &claimsRaw); err != nil {
 			return nil, fmt.Errorf("scan page: %w", err)
 		}
 		claims, err := decodeClaims(claimsRaw)

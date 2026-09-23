@@ -102,30 +102,34 @@ func IndexPage(
 		return Result{Findings: []store.Finding{finding}}, nil
 	}
 
-	scope, slug, uid, assignedUID, needsWriteback := resolveIdentity(fm, pagePath)
+	scope, slug := resolveScopeSlug(fm, pagePath)
+
+	// Fetched once and reused for both uid resolution and the noop check below, so both see
+	// exactly the same row — see resolveUID's and isNoop's doc comments for why each needs it.
+	existing, err := q.GetPage(ctx, scope, slug)
+	if err != nil {
+		return Result{}, fmt.Errorf("get page %s/%s: %w", scope, slug, err)
+	}
+	uid, assignedUID, needsWriteback := resolveUID(fm.UID, existing)
 
 	// This path just parsed successfully, so any earlier "unparseable" global finding filed
 	// under it (see the badFinding branch above) no longer applies — resolve it now. This
-	// runs even when the page turns out to be a content noop below: a page recovering from
-	// unparseable can never itself be a noop (isNoop compares against an existing document
-	// row, and a page that failed to parse never got one), but resolving here rather than
-	// after the noop check keeps this independent of that unrelated short-circuit. Scoped to
-	// this exact path, so a hypothetical future partial reindex touching only some paths can
-	// never resolve another path's unparseable finding — see ResolveGlobalFindingsForPath's
-	// doc comment. ErrScopeDenied is swallowed for the same reason the write above swallows
-	// it: a page outside this Queries' scopes must not take the whole run down.
+	// runs even when the page turns out to be a noop below, which keeps it independent of
+	// that unrelated short-circuit. Scoped to this exact path, so a hypothetical future
+	// partial reindex touching only some paths can never resolve another path's unparseable
+	// finding — see ResolveGlobalFindingsForPath's doc comment. ErrScopeDenied is swallowed
+	// for the same reason the write above swallows it: a page outside this Queries' scopes
+	// must not take the whole run down.
 	if err := q.ResolveGlobalFindingsForPath(ctx, "unparseable", scope, pagePath); err != nil &&
 		!errors.Is(err, store.ErrScopeDenied) {
 		return Result{}, fmt.Errorf("resolve unparseable finding for %s: %w", pagePath, err)
 	}
 
 	bodyHash := hashOf(page.Body)
+	typeName := orDefault(fm.Type, "note")
+	fingerprint := ic.Registry.Fingerprint(typeName)
 
-	noop, err := isNoop(ctx, q, scope, slug, bodyHash, gitVersion)
-	if err != nil {
-		return Result{}, fmt.Errorf("check existing page %s: %w", pagePath, err)
-	}
-	if noop {
+	if isNoop(existing, bodyHash, gitVersion, fingerprint) {
 		return Result{Indexed: true, Changed: false, UID: uid}, nil
 	}
 
@@ -134,7 +138,6 @@ func IndexPage(
 		AssignedUID: assignedUID, NeedsWriteback: needsWriteback,
 	}
 
-	typeName := orDefault(fm.Type, "note")
 	tokens := CountTokens(page.Body)
 	tags, tagFindings := classifyTags(fm.Tags, ic.Facets)
 	result.Findings = append(result.Findings, tagFindings...)
@@ -143,6 +146,7 @@ func IndexPage(
 	doc := buildDocument(fm, documentArgs{
 		uid: uid, slug: slug, scope: scope, typeName: typeName, pagePath: pagePath,
 		body: page.Body, bodyHash: bodyHash, tokens: tokens, gitVersion: gitVersion,
+		typeFingerprint: fingerprint,
 	}, tags)
 	if err := q.UpsertDocument(ctx, doc); err != nil {
 		return Result{}, fmt.Errorf("index %s: %w", pagePath, err)
@@ -186,18 +190,40 @@ func parsePage(raw string) (vault.Page, frontmatter, *store.Finding) {
 	return page, fm, nil
 }
 
-// resolveIdentity fills in scope, slug and uid from the frontmatter, falling back to the
-// page's path when the frontmatter omits them, and mints a fresh UID (flagged for
-// writeback) when the page has none yet.
-func resolveIdentity(fm frontmatter, pagePath string) (scope, slug, uid, assignedUID string, needsWriteback bool) {
+// resolveScopeSlug fills in scope and slug from the frontmatter, falling back to the page's
+// path when the frontmatter omits them.
+func resolveScopeSlug(fm frontmatter, pagePath string) (scope, slug string) {
 	scope = orDefault(fm.Scope, vault.ScopeOf(pagePath))
 	slug = orDefault(fm.Slug, vault.SlugFromFilename(path.Base(pagePath)))
-	uid = fm.UID
-	if uid == "" {
-		uid = vault.NewUID()
-		assignedUID, needsWriteback = uid, true
+	return scope, slug
+}
+
+// resolveUID fills in uid from the frontmatter, falling back to the uid already recorded for
+// this (scope, slug) — existing, the very row isNoop compares against, fetched once by
+// IndexPage via GetPage — and minting a fresh ULID only when neither is available.
+//
+// Reusing the existing row's uid is the fix for a page whose frontmatter has no uid: uid was
+// previously minted fresh (vault.NewUID()) on every call regardless of what was already
+// indexed, so a uid-less page got a different uid on every reindex; the second run's insert
+// then collided with documents_scope_slug_key, because the first run's row was still sitting
+// there under the old uid. existing is already scope-qualified by GetPage — its SQL matches
+// only `d.scope = $2 and d.scope = any($3::text[])`, see GetPage's own doc comment — so a
+// page in a scope this Queries does not hold can never read, and therefore can never collide
+// with, another scope's row; it simply falls through to minting fresh, which then fails at
+// UpsertDocument with ErrScopeDenied like any other out-of-scope write.
+//
+// needsWriteback is set whenever the frontmatter itself has no uid, whether a uid is reused
+// from existing or freshly minted, since the page on disk needs the uid written back into its
+// frontmatter either way — matching the pre-existing writeback contract.
+func resolveUID(fmUID string, existing *store.PageRow) (uid, assignedUID string, needsWriteback bool) {
+	if fmUID != "" {
+		return fmUID, "", false
 	}
-	return scope, slug, uid, assignedUID, needsWriteback
+	if existing != nil && existing.UID != "" {
+		return existing.UID, existing.UID, true
+	}
+	uid = vault.NewUID()
+	return uid, uid, true
 }
 
 func hashOf(body string) string {
@@ -205,29 +231,30 @@ func hashOf(body string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// isNoop reports whether the stored page already matches this content and git version,
-// comparing both: matching only the hash would treat a page amended at a new commit but
-// with identical text as unresolved, and matching only the version would treat a genuinely
-// edited file re-committed at the same version as unchanged. GetPage's own error (a real
-// lookup failure, not "not found" — it returns nil, nil for that) is propagated rather than
-// swallowed, since silently proceeding to re-index would mask a real database problem.
+// isNoop reports whether existing (the stored row for this page's (scope, slug), or nil if
+// there is none) already matches this content, git version and registry fingerprint —
+// comparing all three: matching only the hash would treat a page amended at a new commit but
+// with identical text as unresolved; matching only the version would treat a genuinely edited
+// file re-committed at the same version as unchanged; and ignoring fingerprint entirely is
+// bug 2 this compares against — a page whose content and git version never changed but whose
+// type's max_tokens/max_claims/indexed trait changed in defaults/types/*.yaml would otherwise
+// keep stale findings forever, since nothing else this function already checks would ever
+// notice the registry moved.
 //
-// The lookup is by (scope, slug) — the page's actual identity — not by slug alone. Keyed on
-// slug alone it compared against whichever scope's row sorted first, which broke twice for a
-// slug held in two scopes: the losing page never matched and so re-upserted on every reindex,
-// making Changed useless as an acceptance signal; and, because gitVersion is a per-file blob
-// hash, two byte-identical same-slug pages in different scopes made the second one compare
-// equal to the first and report Indexed=true, Changed=false — never indexed at all, with no
-// finding to say so.
-func isNoop(ctx context.Context, q *store.Queries, scope, slug, bodyHash, gitVersion string) (bool, error) {
-	existing, err := q.GetPage(ctx, scope, slug)
-	if err != nil {
-		return false, fmt.Errorf("get page %s/%s: %w", scope, slug, err)
-	}
+// existing is fetched once by IndexPage via GetPage and passed in here (and to resolveUID)
+// rather than looked up again — see GetPage's own doc comment for why the lookup is already
+// scope-qualified by (scope, slug), not slug alone: keyed on slug alone it compared against
+// whichever scope's row sorted first, which broke twice for a slug held in two scopes — the
+// losing page never matched and so re-upserted on every reindex, making Changed useless as an
+// acceptance signal; and, because gitVersion is a per-file blob hash, two byte-identical
+// same-slug pages in different scopes made the second one compare equal to the first and
+// report Indexed=true, Changed=false — never indexed at all, with no finding to say so.
+func isNoop(existing *store.PageRow, bodyHash, gitVersion, fingerprint string) bool {
 	if existing == nil {
-		return false, nil
+		return false
 	}
-	return existing.BodyHash == bodyHash && existing.GitVersion == gitVersion, nil
+	return existing.BodyHash == bodyHash && existing.GitVersion == gitVersion &&
+		existing.TypeFingerprint == fingerprint
 }
 
 // classifyTags converts each tag to its ltree path via the facet registry, reporting any
@@ -293,6 +320,7 @@ func validationFindings(reg *registry.Registry, typeName string, tokens int, fm 
 type documentArgs struct {
 	uid, slug, scope, typeName, pagePath string
 	body, bodyHash, gitVersion           string
+	typeFingerprint                      string
 	tokens                               int
 }
 
@@ -304,7 +332,7 @@ func buildDocument(fm frontmatter, args documentArgs, tags []string) store.Docum
 		Aliases: fm.Aliases, Tags: tags, Status: fm.Status, Owner: fm.Owner,
 		BodyMD: args.body, BodyHash: args.bodyHash, Tokens: args.tokens,
 		ClaimsCount: len(fm.Claims), Historical: historicalStatuses[fm.Status],
-		GitVersion: args.gitVersion,
+		GitVersion: args.gitVersion, TypeFingerprint: args.typeFingerprint,
 	}
 }
 

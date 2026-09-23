@@ -1,0 +1,14 @@
+-- The indexer's skip-unchanged optimisation (body_hash + git_version) only ever compared a
+-- page against itself: it never accounted for findings depending on the registry too
+-- (validationFindings reads reg.Limits/reg.Traits for the page's type). Editing a type's
+-- max_tokens in defaults/types/*.yaml therefore left every unchanged page's stale findings
+-- in place forever, with nothing distinguishing "genuinely unchanged" from "unchanged but
+-- the registry moved under it".
+--
+-- type_fingerprint records registry.Registry.Fingerprint(type) as of the page's last real
+-- indexing pass. It is opaque to SQL — a plain equality comparison is all the indexer needs
+-- to tell whether the page's effective type definition has moved since — and defaults to ''
+-- so a database migrated from before this column exists compares unequal to any real
+-- fingerprint on the very next reindex, forcing exactly one re-evaluation pass rather than
+-- silently trusting stale findings computed before this fix existed.
+alter table documents add column if not exists type_fingerprint text not null default '';

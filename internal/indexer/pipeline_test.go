@@ -2,6 +2,7 @@ package indexer_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -140,6 +141,37 @@ func TestMissingUIDIsAssignedAndFlaggedForWriteback(t *testing.T) {
 	require.True(t, result.NeedsWriteback)
 }
 
+// TestUIDLessPageReusesItsRecordedUIDAcrossReindexes pins bug 1: vault.NewUID mints a fresh
+// ULID on every call, and resolveIdentity (the code this replaced) called it unconditionally
+// whenever frontmatter lacked a uid — so a uid-less page got a different uid every reindex.
+// The first run's row stayed in the documents table under the old uid, and the second run's
+// insert of a brand new uid for the same (scope, slug) collided with documents_scope_slug_key
+// — exactly the "duplicate key value violates unique constraint" failure hit reindexing a real
+// vault. Reusing the uid already recorded for (scope, slug) — via resolveUID reading the row
+// GetPage already fetched — is the fix; this pins both that the uid stays stable and that
+// reindexing twice never errors.
+func TestUIDLessPageReusesItsRecordedUIDAcrossReindexes(t *testing.T) {
+	q := store.NewQueries(testutil.NewDB(t), store.Scopes{"work"})
+	raw := "---\nslug: x\ntype: gotcha\nscope: work\ntitle: T\n---\nbody\n"
+
+	first := index(t, q, raw)
+	require.NotEmpty(t, first.UID)
+	require.True(t, first.NeedsWriteback, "the frontmatter still has no uid on disk")
+
+	second := index(t, q, raw)
+	require.Equal(t, first.UID, second.UID,
+		"a uid-less page must reuse the uid already recorded for its (scope, slug), not mint a new one")
+	// The second pass is a true no-op (identical content, git version and registry), and a
+	// no-op Result never reports NeedsWriteback/AssignedUID regardless of uid — that is this
+	// pipeline's pre-existing, unrelated contract (see the early "if isNoop" return in
+	// IndexPage), not something bug 1's fix changes.
+	require.False(t, second.Changed, "unchanged content, git version and registry must still be a no-op")
+
+	rows, err := q.ListPages(context.Background(), store.PageFilter{})
+	require.NoError(t, err)
+	require.Len(t, rows, 1, "the second reindex must update the existing row, not insert a colliding one")
+}
+
 func TestOversizePageIsIndexedWholeWithAFinding(t *testing.T) {
 	q := store.NewQueries(testutil.NewDB(t), store.Scopes{"work"})
 	big := strings.Replace(gotchaPage, "Body text mentioning [[other-page]].",
@@ -267,6 +299,78 @@ func TestReindexResolvesALongHeadlineFindingOnceTheTitleIsShortened(t *testing.T
 	require.NoError(t, err)
 	require.False(t, hasStoreFinding(findings, "long_headline"),
 		"once the title is short again the finding must clear, not stay active forever")
+}
+
+// gotchaRegistryContext builds a pipeline Context whose sole "gotcha" type has the given
+// max_tokens, everything else identical to pipelineContext's. It lets a test hold the page's
+// own content and git version fixed while varying only what registry.Registry.Fingerprint
+// covers, to isolate that as the thing driving re-evaluation.
+func gotchaRegistryContext(t *testing.T, maxTokens int) indexer.Context {
+	t.Helper()
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gotcha.yaml"),
+		[]byte(fmt.Sprintf("name: gotcha\ntraits: [indexed, cited]\nmax_tokens: %d\n", maxTokens)), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "vendor.yaml"),
+		[]byte("name: vendor\nvalues:\n  azure:\n    children:\n      expressroute: {}\n"), 0o644))
+
+	reg, err := registry.Load(dir)
+	require.NoError(t, err)
+	facets, err := registry.LoadFacets(dir)
+	require.NoError(t, err)
+	return indexer.Context{Registry: reg, Facets: facets,
+		Slugs: map[vault.ScopedSlug]string{}, Aliases: vault.AliasRegistry{}}
+}
+
+// TestReindexReevaluatesFindingsWhenTheRegistryChangesEvenIfThePageDidNot pins bug 2: the
+// indexer's skip-unchanged optimisation used to compare only body_hash and git_version, never
+// the registry, even though validationFindings depends on reg.Limits/reg.Traits too — so
+// editing a type's max_tokens in defaults/types/*.yaml had no effect on an already-indexed,
+// otherwise-unchanged page; its stale findings stuck forever. gitVersion is deliberately held
+// at "abc" for every call below — unlike
+// TestReindexResolvesALongHeadlineFindingOnceTheTitleIsShortened's two different versions —
+// specifically to prove the re-evaluation is driven by the registry fingerprint changing, not
+// by content or git version, and that an unchanged registry is still a true no-op.
+func TestReindexReevaluatesFindingsWhenTheRegistryChangesEvenIfThePageDidNot(t *testing.T) {
+	q := store.NewQueries(testutil.NewDB(t), store.Scopes{"work"})
+	ctx := context.Background()
+
+	first, err := indexer.IndexPage(ctx, q, "work/gotchas/ergw.md", gotchaPage, "abc",
+		gotchaRegistryContext(t, 1200))
+	require.NoError(t, err)
+	require.True(t, first.Changed)
+	require.False(t, hasFinding(first, "oversize"))
+
+	// Same content, same git version, same registry limits: an unchanged registry must still
+	// be a true no-op, per the fix's own requirement not to force re-evaluation on every run.
+	same, err := indexer.IndexPage(ctx, q, "work/gotchas/ergw.md", gotchaPage, "abc",
+		gotchaRegistryContext(t, 1200))
+	require.NoError(t, err)
+	require.False(t, same.Changed, "unchanged vault and unchanged registry must still be a no-op")
+
+	// The type's max_tokens is lowered below the page's own token count: the registry moved,
+	// the page did not.
+	tightened, err := indexer.IndexPage(ctx, q, "work/gotchas/ergw.md", gotchaPage, "abc",
+		gotchaRegistryContext(t, 1))
+	require.NoError(t, err)
+	require.True(t, tightened.Changed,
+		"a registry change must force re-evaluation even though content and git version did not move")
+	require.True(t, hasFinding(tightened, "oversize"))
+
+	findings, err := q.GetFindings(ctx, tightened.UID)
+	require.NoError(t, err)
+	require.True(t, hasStoreFinding(findings, "oversize"))
+
+	// Reverting the registry must revert the finding, not leave it stuck from the tightened pass.
+	reverted, err := indexer.IndexPage(ctx, q, "work/gotchas/ergw.md", gotchaPage, "abc",
+		gotchaRegistryContext(t, 1200))
+	require.NoError(t, err)
+	require.True(t, reverted.Changed)
+	require.False(t, hasFinding(reverted, "oversize"))
+
+	findings, err = q.GetFindings(ctx, reverted.UID)
+	require.NoError(t, err)
+	require.False(t, hasStoreFinding(findings, "oversize"),
+		"reverting the registry must clear the finding, not leave it stuck")
 }
 
 // TestReindexingOnePageNeverResolvesAnothersFindings is the partial-run trap named directly

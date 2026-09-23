@@ -167,6 +167,31 @@ func (r *Registry) Limits(name string) (int, int) {
 // Errors returns one message per file that failed to load.
 func (r *Registry) Errors() []string { return append([]string(nil), r.errors...) }
 
+// Fingerprint returns a comparable string capturing exactly the parts of typeName's
+// definition that feed indexer.validationFindings: its token/claim limits (Limits) and its
+// "indexed" trait (the only trait validationFindings reads, for missing_claims), plus
+// whether the type is defined at all. That last part matters on its own: Limits and Traits
+// both fall back to package defaults for an unknown type (see their own doc comments), so
+// deleting a type's yaml file changes a page's effective limits without changing a single
+// field on any remaining TypeDef — a fingerprint built only from the resolved numbers could
+// miss it if the deleted type's limits happened to already match the defaults.
+//
+// This governs indexer's skip-unchanged optimisation: a page is re-evaluated whenever its
+// type's fingerprint changes, even if the page's own content and git version have not. It is
+// deliberately narrow — Description, Folder, StalenessDays, Fields and every trait besides
+// "indexed" are left out because nothing in validationFindings (or EdgesFrom) reads them for
+// finding purposes today [Fields does feed EdgesFrom's ref-edge detection, a separate,
+// pre-existing staleness gap this fingerprint does not attempt to close]; claim_rules is
+// accepted by the type schema but not yet parsed into TypeDef at all, so it cannot affect a
+// finding either. Including any of those would force every page of a type to be re-evaluated
+// for config churn that cannot change what a reindex reports.
+func (r *Registry) Fingerprint(typeName string) string {
+	_, known := r.types[typeName]
+	maxTokens, maxClaims := r.Limits(typeName)
+	indexed := r.Traits(typeName)["indexed"]
+	return fmt.Sprintf("known=%t;tokens=%d;claims=%d;indexed=%t", known, maxTokens, maxClaims, indexed)
+}
+
 func compileSchema() (*jsonschema.Schema, error) {
 	body, err := schemaFS.ReadFile("schema/type.schema.json")
 	if err != nil {
