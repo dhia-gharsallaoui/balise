@@ -3,6 +3,8 @@ package store_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -214,6 +216,73 @@ func TestSemanticSearchFindsMatchWithinScope(t *testing.T) {
 	require.Len(t, hits, 1)
 	require.Equal(t, "semantic", hits[0].Why)
 	require.Equal(t, "ergw", hits[0].Slug)
+}
+
+// TestSemanticCoverageFloorSuppressesWeakMatches proves the coverage-quality floor in
+// semanticRows (see semanticFloor's doc comment in internal/store/queries.go): a query whose
+// best semantic evidence is weak gets no semantic rows at all, not a full-but-low-quality
+// set. This is what keeps coverage honest -- internal/search.AssessCoverage and both MCP
+// coverage checks all key off hit count or shared terms, so an empty semantic arm reads as
+// "low" everywhere automatically, with no need to touch any of those three call sites.
+//
+// Five documents each get one claim, with a synthetic 3D vector engineered (via vec3) to
+// have an independently-chosen cosine similarity to two different orthogonal query vectors:
+// [1,0,0] ("well matched") and [0,1,0] ("off topic"). The mean of the five documents'
+// similarity to the well-matched query is 0.33, above semanticFloor (0.25); to the off-topic
+// query it is 0.10, below it -- mirroring the real separation measured against
+// /tmp/balise-live.
+func TestSemanticCoverageFloorSuppressesWeakMatches(t *testing.T) {
+	pool := testutil.NewDB(t)
+	ctx := context.Background()
+	work := store.NewQueries(pool, store.Scopes{"work"})
+
+	const model = "test-model"
+	// {c_good, c_bad} per document, mirroring the real-vault gap: mean good = 0.33 (above
+	// the 0.25 floor), mean bad = 0.10 (below it).
+	goodBad := [][2]float64{
+		{0.40, 0.05},
+		{0.35, 0.08},
+		{0.32, 0.10},
+		{0.30, 0.12},
+		{0.28, 0.15},
+	}
+	for i, gb := range goodBad {
+		uid := fmt.Sprintf("floor-doc-%d", i)
+		slug := fmt.Sprintf("floor-topic-%d", i)
+		seedDoc(t, work, func(d *store.Document) {
+			d.UID, d.Slug, d.Path = uid, slug, "work/gotchas/"+slug+".md"
+		})
+		claimText := fmt.Sprintf("Synthetic claim content number %d", i)
+		require.NoError(t, work.ReplaceClaims(ctx, uid, []store.Claim{
+			{ClaimID: "c1", Ord: 0, Text: claimText, Status: "active"},
+		}))
+		vector := vec3(gb[0], gb[1])
+		require.NoError(t, work.UpsertClaimEmbeddings(ctx, model, len(vector), []store.ClaimEmbeddingWrite{
+			{Hash: embed.Hash(claimText), Vector: embed.EncodeVector(vector)},
+		}))
+	}
+
+	wellMatched := &store.SemanticQuery{Model: model, Vector: []float32{1, 0, 0}}
+	hits, err := work.SearchClaims(ctx, "zzz_no_lexical_or_trigram_match_zzz", false, 30, wellMatched)
+	require.NoError(t, err)
+	require.NotEmpty(t, hits, "mean top-5-doc similarity 0.33 clears semanticFloor and should return rows")
+
+	offTopic := &store.SemanticQuery{Model: model, Vector: []float32{0, 1, 0}}
+	hits, err = work.SearchClaims(ctx, "zzz_no_lexical_or_trigram_match_zzz", false, 30, offTopic)
+	require.NoError(t, err)
+	require.Empty(t, hits, "mean top-5-doc similarity 0.10 is below semanticFloor and should return nothing")
+}
+
+// vec3 builds a unit-length 3D vector whose cosine similarity to [1,0,0] is exactly good and
+// to [0,1,0] is exactly bad, letting a test fixture control a claim's similarity to two
+// different query vectors independently -- something a 2D vector cannot do (sin/cos of one
+// angle can't make both similarities simultaneously small).
+func vec3(good, bad float64) []float32 {
+	rest := 1 - good*good - bad*bad
+	if rest < 0 {
+		rest = 0
+	}
+	return []float32{float32(good), float32(bad), float32(math.Sqrt(rest))}
 }
 
 // seedVictimDoc plants a "personal"-scoped document with a claim only "personal" can see,

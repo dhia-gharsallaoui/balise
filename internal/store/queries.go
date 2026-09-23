@@ -656,11 +656,7 @@ func (q *Queries) semanticRows(ctx context.Context, sem *SemanticQuery, includeH
 		return nil, nil
 	}
 
-	type scored struct {
-		docUID, claim string
-		score         float64
-	}
-	results := make([]scored, 0, len(cached))
+	results := make([]scoredClaim, 0, len(cached))
 	for i, c := range candidates {
 		raw, ok := cached[hashes[i]]
 		if !ok {
@@ -670,9 +666,31 @@ func (q *Queries) semanticRows(ctx context.Context, sem *SemanticQuery, includeH
 		if err != nil {
 			return nil, fmt.Errorf("semantic search: decode vector for %s: %w", c.DocUID, err)
 		}
-		results = append(results, scored{c.DocUID, c.Claim, embed.Cosine(sem.Vector, vec)})
+		results = append(results, scoredClaim{c.DocUID, c.Claim, embed.Cosine(sem.Vector, vec)})
 	}
 	sort.Slice(results, func(i, j int) bool { return results[i].score > results[j].score })
+
+	// A dense embedder always returns its full candidate set ranked by similarity, even
+	// when nothing in the vault is actually relevant -- unlike the lexical/trigram arms,
+	// which return zero rows for a query that shares no terms with anything indexed.
+	// Without this check, a query about a topic entirely absent from the vault (e.g. "best
+	// recipe for sourdough bread" against an infrastructure-knowledge vault) still gets 30
+	// semantic rows back, and every one of those rows shares *some* incidental term with the
+	// query somewhere in its claim text -- so the coverage heuristic in
+	// internal/search.AssessCoverage (any shared term across ~450 words of claim text is
+	// near-certain over 30 hits) reports "ok" for a query the vault has nothing on.
+	//
+	// So: treat a weak-evidence semantic arm as if it found nothing at all, the same
+	// (nil, nil) signal already used above for "no candidates" / "no cached embeddings".
+	// This suppresses the whole arm's rows rather than just flagging them, which both fixes
+	// coverage at its source (every coverage computation in the codebase keys off hit
+	// count or shared terms, so an empty arm is automatically read as "low" everywhere,
+	// with no need to touch AssessCoverage or either MCP coverage computation) and is more
+	// honest to an agent than handing back 30 rows it would otherwise have to read in full
+	// only to find the best of them is weak.
+	if !semanticStrongEnough(results) {
+		return nil, nil
+	}
 
 	out := make([]claimRRFRow, len(results))
 	for rank, r := range results {
@@ -682,6 +700,73 @@ func (q *Queries) semanticRows(ctx context.Context, sem *SemanticQuery, includeH
 		}
 	}
 	return out, nil
+}
+
+// scoredClaim is one candidate claim's raw cosine similarity against a query vector, before
+// it is converted to an RRF rank score in semanticRows.
+type scoredClaim struct {
+	docUID, claim string
+	score         float64
+}
+
+// semanticFloor and semanticFloorDocs implement the coverage-quality floor for the semantic
+// search arm: a query is "strong enough" for semantic evidence only if the mean of its
+// best-matching-claim cosine similarity across the top semanticFloorDocs *distinct
+// documents* clears semanticFloor.
+//
+// Calibrated against the real vault at /tmp/balise-live (139 pages / 611 claims,
+// sentence-transformers/all-MiniLM-L6-v2), using 3 queries the vault has good material for
+// ("why did the apply fail", "how do I avoid breaking telemetry", "what happens when a
+// gateway is updated") and 3 it has nothing on ("quarterly revenue forecast for the sales
+// team", "how do I train a neural network", "best recipe for sourdough bread"):
+//
+//   - Raw top-1 cosine similarity does NOT separate the two groups: the weakest good-topic
+//     query scored 0.3243, but the strongest absent-topic query scored higher, 0.3371 --
+//     a single incidental near-match claim is enough to beat a real one. A top-1 floor
+//     would have misclassified at least one query in testing.
+//   - The mean cosine similarity of the best-matching claim across the top 5 distinct
+//     documents (not the top 5 claims, which can repeat one document many times) DOES
+//     separate them cleanly: good-topic queries ranged 0.2668-0.4022, absent-topic queries
+//     ranged 0.1469-0.2326 -- a margin of about 0.034 with no overlap.
+//
+// semanticFloor (0.25) sits at the midpoint of that gap (0.2668 and 0.2326). semanticFloor
+// is a heuristic tuned to one corpus and embedding model, not a universal constant -- but it
+// is what the "calibrate against the real vault, don't guess" requirement asked for, and the
+// mechanism (per-document dedup, not per-claim, so one long-winded document can't dominate
+// the average) is the part expected to generalize.
+const (
+	semanticFloor     = 0.25
+	semanticFloorDocs = 5
+)
+
+// semanticStrongEnough reports whether results (already sorted by descending score) carries
+// enough genuine evidence to be worth returning at all. See semanticFloor for the
+// calibration this implements.
+func semanticStrongEnough(results []scoredClaim) bool {
+	if len(results) == 0 {
+		return false
+	}
+
+	// results is sorted descending, so a document's first appearance in it is already that
+	// document's best-matching claim -- no need to scan for the max explicitly.
+	seen := make(map[string]bool, semanticFloorDocs)
+	var sum float64
+	var n int
+	for _, r := range results {
+		if n >= semanticFloorDocs {
+			break
+		}
+		if seen[r.docUID] {
+			continue
+		}
+		seen[r.docUID] = true
+		sum += r.score
+		n++
+	}
+	if n == 0 {
+		return false
+	}
+	return sum/float64(n) >= semanticFloor
 }
 
 // fuseRRF sums each document's RRF score across every arm that produced a row for it
