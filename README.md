@@ -238,6 +238,18 @@ balise compile extract-claims <vault>     propose claims for pages missing them
 
 `--dsn` (or `BALISE_DSN`) applies to all of them.
 
+Commands that read the registry also take `--defaults`. When it is not given they look
+inside the vault, then beside it, then fall back to the copy embedded in the binary — the
+working directory is never consulted, which is what lets an MCP host spawn `balise` from
+anywhere. Every run prints which one it picked, on stderr:
+
+```
+defaults: built into this binary (embedded; pass --defaults to use your own)
+```
+
+If you are editing `defaults/` in a checkout, pass `--defaults ./defaults` or that line will
+tell you your edits were ignored.
+
 ## Testing
 
 ```bash

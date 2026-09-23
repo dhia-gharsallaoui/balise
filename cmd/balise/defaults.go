@@ -45,6 +45,21 @@ const defaultsFlagHelp = "directory holding types/, facets/, spaces.yaml, order.
 func resolveDefaultsDir(cmd *cobra.Command, flagName, flagValue, vault string) (dir string, cleanup func(), err error) {
 	noop := func() {}
 
+	// Every successful return announces which registry it picked, on stderr.
+	//
+	// Stderr, not stdout, because `mcp --stdio` speaks JSON-RPC on stdout and a stray
+	// line there corrupts the stream for the host.
+	//
+	// It is printed at all because the resolution order deliberately does not consult
+	// the working directory, which is what makes the documented MCP config work from
+	// anywhere -- and which also means someone standing in this repo editing defaults/
+	// and running `balise reindex <vault>` gets the embedded copy and no hint that
+	// their edits were ignored. That failure is silent and looks exactly like a bug in
+	// whatever they were changing. One line makes it visible instead.
+	announce := func(chosen, source string) {
+		fmt.Fprintf(cmd.ErrOrStderr(), "defaults: %s (%s)\n", chosen, source)
+	}
+
 	if cmd.Flags().Changed(flagName) {
 		info, statErr := os.Stat(flagValue)
 		if statErr != nil {
@@ -53,17 +68,27 @@ func resolveDefaultsDir(cmd *cobra.Command, flagName, flagValue, vault string) (
 		if !info.IsDir() {
 			return "", noop, fmt.Errorf("--%s %s: not a directory", flagName, flagValue)
 		}
+		announce(flagValue, "--"+flagName)
 		return flagValue, noop, nil
 	}
 
 	if inside := filepath.Join(vault, "defaults"); isDir(inside) {
+		announce(inside, "inside the vault")
 		return inside, noop, nil
 	}
 	if beside := filepath.Join(filepath.Dir(filepath.Clean(vault)), "defaults"); isDir(beside) {
+		announce(beside, "beside the vault")
 		return beside, noop, nil
 	}
 
-	return extractEmbeddedDefaults()
+	// Named rather than shown as its temp path: the extracted directory is an internal
+	// detail that changes every run, and "embedded" is the fact that matters -- it is
+	// what tells a reader their own defaults/ was not used.
+	embedded, cleanupEmbedded, embedErr := extractEmbeddedDefaults()
+	if embedErr == nil {
+		announce("built into this binary", "embedded; pass --"+flagName+" to use your own")
+	}
+	return embedded, cleanupEmbedded, embedErr
 }
 
 func isDir(path string) bool {
