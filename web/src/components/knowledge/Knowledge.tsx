@@ -66,6 +66,9 @@ export function Knowledge({ tree, restrictTo, onClearRestrict }: KnowledgeProps)
   const [view, setViewState] = useState<ViewMode>(initial.view);
   const [query, setQueryState] = useState(initial.query);
   const [groups, setGroups] = useState<Group[]>([]);
+  // Search hits, kept separate from browse's `groups` and in the exact order /api/search
+  // returned them — see hitsToRows below and search-ranking-coverage-report.md (FIX 1).
+  const [rows, setRows] = useState<PageRow[]>([]);
   const [coverage, setCoverage] = useState<"ok" | "low" | null>(null);
   // A page is opened by (scope, slug): the same slug can name a different customer's page in
   // each scope, so the slug alone is not enough to fetch the right one.
@@ -122,7 +125,7 @@ export function Knowledge({ tree, restrictTo, onClearRestrict }: KnowledgeProps)
       search(query, showHistorical)
         .then((res) => {
           if (cancelled) return;
-          setGroups(groupHits(res.hits));
+          setRows(hitsToRows(res.hits));
           setCoverage(res.coverage);
         })
         .catch((e: unknown) => !cancelled && setError(messageOf(e)));
@@ -166,11 +169,19 @@ export function Knowledge({ tree, restrictTo, onClearRestrict }: KnowledgeProps)
     writeUrl({ hiddenTypes: [...next] }, true);
   }
 
+  // Same boundary Knowledge's own data-fetch effect and ResultList use to choose between
+  // search results and browse groups — kept in one place so all three never disagree.
+  const searching = query.trim().length > 0;
   const visibleGroups = filterGroups(groups, space, hiddenTypes, restrictTo?.pages ?? null);
+  const visibleRows = filterRows(rows, space, hiddenTypes, restrictTo?.pages ?? null);
   // Graph view's global (no-centre) mode reuses these exact filters so List and Graph
   // never disagree about what's visible — GraphNode has no `space` field to filter on
-  // directly (see globalGraph.ts), so this crosses the reference by uid instead.
-  const allowedUids = new Set(visibleGroups.flatMap((g) => g.pages.map((p) => p.uid)));
+  // directly (see globalGraph.ts), so this crosses the reference by uid instead. Only the
+  // currently-active list feeds it: while searching, stale browse groups (or vice versa)
+  // must not leak extra nodes into the graph.
+  const allowedUids = new Set(
+    searching ? visibleRows.map((r) => r.uid) : visibleGroups.flatMap((g) => g.pages.map((p) => p.uid)),
+  );
 
   // Owner's own call, now settled (see .superpowers/sdd/2026-09-16-balise-slice-frontend/
   // reading-view-report.md): "opening a claim or decision or anything opens a column which
@@ -246,7 +257,13 @@ export function Knowledge({ tree, restrictTo, onClearRestrict }: KnowledgeProps)
             <GraphView centre={open} onOpen={setOpen} allowedUids={allowedUids} />
           </Suspense>
         ) : (
-          <ResultList groups={visibleGroups} query={query} coverage={coverage} onOpen={setOpen} />
+          <ResultList
+            groups={visibleGroups}
+            rows={visibleRows}
+            query={query}
+            coverage={coverage}
+            onOpen={setOpen}
+          />
         )}
       </div>
     </div>
@@ -279,22 +296,48 @@ function filterGroups(
     .filter((g) => g.pages.length > 0);
 }
 
+// Same three filters as filterGroups (hidden types, selected space, Home's restrictTo), but
+// row-granularity and order-preserving rather than group-granularity: search results have no
+// group to drop or keep as a whole, and re-sorting them here would undo the one thing FIX 1
+// exists to guarantee (see hitsToRows below).
+function filterRows(
+  rows: PageRow[],
+  space: string | null,
+  hiddenTypes: Set<string>,
+  restrictTo: HomePageRef[] | null,
+): PageRow[] {
+  const allowed = restrictTo ? new Set(restrictTo.map((p) => `${p.scope}/${p.slug}`)) : null;
+  return rows.filter((row) => {
+    if (hiddenTypes.has(row.type)) return false;
+    if (space && row.space !== space) return false;
+    if (allowed && !allowed.has(`${row.scope}/${row.slug}`)) return false;
+    return true;
+  });
+}
+
 // /api/search returns Hit[], a thinner shape than PageRow (no uid, space,
 // historical, tokens, owner, tags, or per-claim status — only matched claim
 // text and the page's own status). This synthesizes best-effort PageRow-shaped
-// rows so search results can flow through the same ResultList/PageRow
-// rendering path as browse mode; see batch-F-report.md for the fields this
-// approximates.
-function groupHits(hits: Hit[]): Group[] {
-  const byType = new Map<string, Group>();
-  for (const hit of hits) {
+// rows so search results can flow through the same PageRow rendering used
+// everywhere else.
+//
+// FIX 1 (search-ranking-coverage-report.md): this used to be groupHits, which bucketed hits
+// into a Map keyed by type and returned Group[] — correct for browse (spec 02 §5.2's fixed
+// type sections), wrong for search, because /api/search already returns hits in relevance
+// order and bucketing by type discards that order (a map's insertion order tracks first
+// occurrence of a type in the hit list, not rank). hitsToRows instead returns a flat,
+// order-preserving PageRow[]: index i here is exactly hits[i], unchanged. The type signal
+// this used to carry as a group header now travels with each row instead — see PageRow's
+// showType prop / TypeChip.
+function hitsToRows(hits: Hit[]): PageRow[] {
+  return hits.map((hit) => {
     const claimStatus = (hit.status ?? "active") as ClaimStatus;
     const claims: Claim[] = hit.matched_claims.map((text) => ({
       text,
       status: claimStatus,
       as_of: null,
     }));
-    const row: PageRow = {
+    return {
       slug: hit.slug,
       uid: hit.slug,
       title: hit.title,
@@ -309,13 +352,5 @@ function groupHits(hits: Hit[]): Group[] {
       tags: [],
       claims,
     };
-    const existing = byType.get(hit.type);
-    if (existing) {
-      existing.pages.push(row);
-      existing.count += 1;
-    } else {
-      byType.set(hit.type, { type: hit.type, count: 1, pages: [row] });
-    }
-  }
-  return [...byType.values()];
+  });
 }
