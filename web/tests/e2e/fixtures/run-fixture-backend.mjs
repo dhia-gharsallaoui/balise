@@ -26,7 +26,15 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..");
 const FIXTURE_SOURCE = join(__dirname, "vault");
-const DEFAULTS_DIR = join(REPO_ROOT, "defaults");
+// Deliberately NOT REPO_ROOT/defaults. That directory holds the *developer's own*
+// registry — defaults/spaces.yaml and tenants.yaml are gitignored because they name real
+// clients — so pointing the fixture backend at it baked whatever scopes that developer
+// happened to have into the visual baselines. On the author's machine that leaked real
+// client names into committed screenshots; on anyone else's it produced a render that
+// could never match the committed baseline, since a fresh clone only has the .example
+// files. Passing no --defaults resolves to the binary's embedded copy (see
+// cmd/balise/defaults.go), which is the tracked, generic set and identical everywhere.
+const DEFAULTS_ARGS = [];
 
 const DSN = "postgresql://balise:balise@localhost:5432/balise?search_path=fixture_vault,public";
 const ADDR = "127.0.0.1:8199";
@@ -72,7 +80,7 @@ function assembleVault(binPath) {
 }
 
 function reindex(binPath, vaultDir) {
-  run(binPath, ["reindex", vaultDir, "--dsn", DSN, "--defaults", DEFAULTS_DIR]);
+  run(binPath, ["reindex", vaultDir, "--dsn", DSN, ...DEFAULTS_ARGS]);
 }
 
 function serve(binPath, vaultDir) {
@@ -82,7 +90,7 @@ function serve(binPath, vaultDir) {
   // session for every /api route on :8199 exactly as it does in production.
   const child = spawn(
     binPath,
-    ["serve", vaultDir, "--addr", ADDR, "--dsn", DSN, "--defaults", DEFAULTS_DIR],
+    ["serve", vaultDir, "--addr", ADDR, "--dsn", DSN, ...DEFAULTS_ARGS],
     { stdio: "inherit", cwd: REPO_ROOT },
   );
 
