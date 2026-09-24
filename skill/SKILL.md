@@ -1,6 +1,6 @@
 ---
 name: balise
-description: Use BEFORE answering any question about infrastructure, tooling, configuration, deployment, operational practice, or how something here works or was decided — a Balise vault is connected over MCP and may hold a recorded team decision that overrides the general best-practice answer. Also use when you establish something durable worth recording.
+description: Use BEFORE answering any question about how this project or its systems are designed, built, configured, deployed, operated or paid for — architecture, tooling, infrastructure, pipelines, models, data, limits, cost, or any choice already made. A Balise vault is connected over MCP and may hold a recorded decision that overrides the general best-practice answer. Also use when you establish something durable worth recording.
 ---
 
 # Balise
