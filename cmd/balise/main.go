@@ -26,19 +26,27 @@ const defaultExtractClaimsModel = "claude-sonnet-5"
 const defaultDSN = "postgresql://balise:balise@localhost:5432/balise"
 
 // loadEmbedder attempts to load the optional semantic-search embedder configured via
-// embed.ModelEnv (BALISE_EMBED_MODEL). Unset, embed.TryLoad returns (nil, nil) immediately --
-// the expected, silent, no-network default -- and this returns nil with no message. Set but
-// failing to load (bad model reference, offline, corrupt cache) is reported to stderr as a
-// one-line, non-fatal diagnostic, and nil is still returned: semantic search must never be
+// embed.ModelEnv (BALISE_EMBED_MODEL). Set but failing to load (bad model reference,
+// offline, corrupt cache) is non-fatal and still returns nil: semantic search must never be
 // the reason `balise serve`, `balise mcp --stdio`, or `balise reindex` fails to start or run
-// -- a missing or broken model degrades every caller to lexical-only search, silently to
-// callers, but visibly (once, here) to whoever is running the process.
+// -- a missing or broken model degrades every caller to lexical-only search.
+//
+// All three outcomes announce themselves on stderr, for the same reason resolveDefaultsDir
+// does (see defaults.go): the off state is the default and is otherwise invisible, and a
+// vault indexed with embeddings served by a process without them answers plain-language
+// queries badly with no indication why. "off" printed once is what distinguishes that from
+// a ranking bug. Stderr, not stdout, because `mcp --stdio` speaks JSON-RPC on stdout.
 func loadEmbedder(cmd *cobra.Command) *embed.Embedder {
 	embedder, err := embed.TryLoad()
 	if err != nil {
-		cmd.PrintErrf("semantic search disabled: %v\n", err)
+		cmd.PrintErrf("semantic search: disabled (%v)\n", err)
 		return nil
 	}
+	if embedder == nil {
+		cmd.PrintErrf("semantic search: off (lexical only; set %s to enable)\n", embed.ModelEnv)
+		return nil
+	}
+	cmd.PrintErrf("semantic search: on (%s, %d dimensions)\n", embedder.Model(), embedder.Dim())
 	return embedder
 }
 

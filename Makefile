@@ -46,7 +46,11 @@ PASSWORD  ?= $(BALISE_PASSWORD)
 # with `make down` first if the default `make up` pair is already using that port.
 DEMO_VAULT    ?= demo-vault
 DEMO_DEFAULTS ?= demo-vault-defaults
-DEMO_DSN      ?= postgresql://balise:balise@localhost:5432/balise?search_path=demo_vault,public
+# Derived from DSN, never hardcoded: `make demo DSN=...` must point every step at the
+# same server. docker-compose.yaml publishes 5433 (not 5432, so it cannot collide with a
+# system Postgres), so overriding DSN is the normal path, not an edge case. The
+# findstring picks & or ? depending on whether DSN already carries a query string.
+DEMO_DSN      ?= $(DSN)$(if $(findstring ?,$(DSN)),&,?)search_path=demo_vault,public
 DEMO_ADDR     ?= 127.0.0.1:8099
 
 RUN_DIR   := .run
@@ -110,14 +114,15 @@ demo: build check-db
 	@echo
 	@echo "Demo vault ready: $(DEMO_VAULT) (defaults: $(DEMO_DEFAULTS), schema: demo_vault)"
 	@echo "Start it:"
-	@echo "  make up VAULT=$(DEMO_VAULT) DEFAULTS=$(DEMO_DEFAULTS) DSN='$(DEMO_DSN)' API_ADDR=$(DEMO_ADDR)"
+	@echo "  make up VAULT=$(DEMO_VAULT) DEFAULTS=$(DEMO_DEFAULTS) DSN='$(DEMO_DSN)' API_ADDR=$(DEMO_ADDR)$(if $(EMBED_MODEL), EMBED_MODEL=$(EMBED_MODEL))"
 	@echo "Then open http://localhost:$(UI_PORT)"
 
 up: build deps check-db
 	@mkdir -p $(RUN_DIR)
 	@$(MAKE) --no-print-directory down >/dev/null 2>&1 || true
 	@echo "starting API on $(API_ADDR)"
-	@BALISE_DSN="$(DSN)" BALISE_PASSWORD="$(PASSWORD)" nohup ./bin/balise serve "$(VAULT)" --addr "$(API_ADDR)" --defaults "$(DEFAULTS)" \
+	@BALISE_DSN="$(DSN)" BALISE_PASSWORD="$(PASSWORD)" BALISE_EMBED_MODEL="$(EMBED_MODEL)" \
+		nohup ./bin/balise serve "$(VAULT)" --addr "$(API_ADDR)" --defaults "$(DEFAULTS)" \
 		> $(API_LOG) 2>&1 & echo $$! > $(API_PID)
 	@echo "starting UI  on $(UI_HOST):$(UI_PORT)"
 	@cd web && BALISE_ALLOWED_HOSTS="$(BALISE_ALLOWED_HOSTS)" \

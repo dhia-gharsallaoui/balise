@@ -39,9 +39,11 @@ neighbours, and `pages` to list a type.
 
 **Read `coverage` before you trust the result.** `coverage: "low"` means the vault did not
 have much for that query — say so rather than presenting a thin pack as settled knowledge.
-Ranking here is lexical, not semantic: matching words, not matching meaning. A query using
-different vocabulary than the vault can miss real content, so if a first `context` call
-comes back thin, try the words the systems actually use before concluding nothing is there.
+Ranking fuses lexical matching with a semantic signal whenever the vault is configured for
+one, so a question phrased in your own words usually still finds the right claims. Where it
+is not configured, ranking is lexical only — matching words, not meaning. Either way, if a
+first `context` call comes back thin, retry with the vocabulary the systems themselves use
+before concluding nothing is there.
 
 If the vault does have the answer, **use it and say where it came from**. That is the
 difference between an answer and a guess.

@@ -55,8 +55,12 @@ Fastest way to see it running, with no data of your own:
 
 ```bash
 git clone https://github.com/dhia-gharsallaoui/balise.git && cd balise
-make demo
+docker compose up -d    # Postgres on :5433
+make demo DSN=postgresql://balise:balise@localhost:5433/balise
 ```
+
+Already have Postgres on 5432? Then `make demo` alone is enough. The compose file
+deliberately publishes **5433** so it cannot collide with a system instance.
 
 `make demo` builds a small fictional vault, indexes it into its own database schema, and prints
 the exact command to start the app against it. It never touches your own vault or index, and it
@@ -214,6 +218,29 @@ The Settings screen shows what the registry currently declares, and which agents
 space — the same scopes that gate `/mcp`:
 
 <img src="docs/media/settings.png" alt="The Settings screen listing each page type with its fields, staleness rule and live page count, the tag facets in use, and the relation kinds present in the vault" width="830">
+
+### Semantic search
+
+Search is lexical by default: Postgres full-text and trigram, fused with reciprocal rank
+fusion. That matches *words*. A question asked in different vocabulary than the vault uses
+can miss content that is genuinely there.
+
+Setting `BALISE_EMBED_MODEL` adds a semantic signal to the same fusion, so plain-language
+questions find the right claims:
+
+```bash
+export BALISE_EMBED_MODEL=sentence-transformers/all-MiniLM-L6-v2
+make demo EMBED_MODEL="$BALISE_EMBED_MODEL" DSN=postgresql://balise:balise@localhost:5433/balise
+```
+
+Embedding runs in-process through [rembed](https://github.com/rostamlabs/rembed) — pure Go,
+no cgo, no ONNX runtime, no external service, no API key. The weights (87MB) download once
+into a local cache on first use, and nothing is fetched unless you set the variable.
+
+Set it for **both** indexing and serving. `balise reindex` embeds the claims; `balise serve`
+and `balise mcp` embed your query at query time. An index built with embeddings but served by
+a process without the model silently falls back to lexical — so every command prints
+`semantic search: on` or `semantic search: off` at startup.
 
 ### Exposing beyond loopback
 
