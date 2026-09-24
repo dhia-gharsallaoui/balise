@@ -25,17 +25,28 @@ func LoadTenants(path string) (*Tenants, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
+	// A *pointer* to the slice, so an absent key is distinguishable from an explicitly
+	// empty one. Both used to be rejected together, which made "this vault has no external
+	// customers" unrepresentable: a single-owner or personal vault could not load its own
+	// registry at all, and /api/settings failed outright.
+	//
+	// The guard's real purpose is to refuse a *silent* fallback to "nothing is a tenant",
+	// since that would quietly move the security partition with no error anywhere. A
+	// truncated file, a typo'd key or a null value give nil here and are still refused. An
+	// explicit `tenants: []` is not silent -- it is the owner stating the partition is
+	// empty -- so it is accepted, and Is() then answers false for everything, which is
+	// exactly what was asked for.
 	var raw struct {
-		Tenants []string `yaml:"tenants"`
+		Tenants *[]string `yaml:"tenants"`
 	}
 	if err := yaml.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-	if len(raw.Tenants) == 0 {
-		return nil, fmt.Errorf("parse %s: tenants is missing or empty", path)
+	if raw.Tenants == nil {
+		return nil, fmt.Errorf("parse %s: tenants key is missing (use `tenants: []` to declare there are none)", path)
 	}
-	names := make(map[string]bool, len(raw.Tenants))
-	for _, name := range raw.Tenants {
+	names := make(map[string]bool, len(*raw.Tenants))
+	for _, name := range *raw.Tenants {
 		names[name] = true
 	}
 	return &Tenants{names: names}, nil

@@ -21,13 +21,31 @@ func TestLoadTenantsRejectsAMissingTenantsKey(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestLoadTenantsRejectsAnEmptyTenantsList(t *testing.T) {
+// A null value is as ambiguous as an absent key -- `tenants:` with nothing after it is far
+// more likely to be a truncated edit than a deliberate statement -- so it is refused too.
+func TestLoadTenantsRejectsANullTenantsValue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tenants.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("tenants:\n"), 0o644))
+
+	_, err := registry.LoadTenants(path)
+	require.Error(t, err)
+}
+
+// An explicit empty list is the opposite of a silent fallback: it is the owner declaring
+// that this vault has no external customers at all, which is the normal case for a
+// personal or single-owner vault. Rejecting it made that vault unrepresentable -- the
+// registry would not load and /api/settings failed outright -- while protecting nothing,
+// since the security risk the guard exists for is an *unnoticed* empty partition.
+func TestLoadTenantsAcceptsAnExplicitlyEmptyList(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "tenants.yaml")
 	require.NoError(t, os.WriteFile(path, []byte("tenants: []\n"), 0o644))
 
-	_, err := registry.LoadTenants(path)
-	require.Error(t, err)
+	tenants, err := registry.LoadTenants(path)
+	require.NoError(t, err)
+	require.False(t, tenants.Is("globex"), "an empty list means nothing is a tenant")
+	require.False(t, tenants.Is(""), "including the empty string")
 }
 
 // A self-contained fixture, not the repo's own defaults/tenants.yaml: that file holds the
