@@ -24,7 +24,11 @@
 
 SHELL := /bin/sh
 
-VAULT     ?= /tmp/balise-live
+# Not /tmp. systemd-tmpfiles ships `D /tmp`, which empties it on every boot, so a vault
+# kept there is lost at the next reboot -- silently, and only once it already holds work
+# worth keeping. A vault is a git repository and the source of truth for everything the
+# index derives; Postgres can always be rebuilt from it, but nothing can rebuild it.
+VAULT     ?= $(HOME)/vaults/work
 # Set to a model name to enable semantic search; empty means lexical-only, no downloads.
 EMBED_MODEL ?= $(BALISE_EMBED_MODEL)
 DSN       ?= postgresql://balise:balise@localhost:5432/balise
