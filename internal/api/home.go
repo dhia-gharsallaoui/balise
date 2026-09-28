@@ -141,7 +141,7 @@ func (s *server) homeWaiting() (homeWaitingJSON, error) {
 	allowed := s.q().AllowedScopes()
 
 	counts := map[string]int{}
-	var proposals []homeProposalJSON
+	proposals := []homeProposalJSON{} // [] not null on the wire: the web Home iterates it directly
 	for _, p := range paths {
 		if !strings.HasSuffix(p, ".md") {
 			continue

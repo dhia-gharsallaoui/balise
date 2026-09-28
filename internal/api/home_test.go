@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -102,6 +103,25 @@ func TestHomeWaitingGroupsProposalsByKind(t *testing.T) {
 	require.Equal(t, 2, byKind["new_page"])
 	require.Equal(t, 1, byKind["update"])
 	require.NotContains(t, byKind, "merge", "a decided proposal must not be counted as waiting")
+}
+
+// TestHomeWaitingProposalsIsEmptyArrayWhenNonePending pins the wire shape when review/
+// exists but holds nothing pending: "proposals" must be [] rather than null. The web Home
+// screen iterates it directly, and a null crashed the whole screen to a blank page.
+func TestHomeWaitingProposalsIsEmptyArrayWhenNonePending(t *testing.T) {
+	pages, err := store.InitGit(t.TempDir())
+	require.NoError(t, err)
+	writeProposal(t, pages, "p-decided", "merge", "work", "work/done.md", "accepted")
+
+	q := store.NewQueries(testutil.NewDB(t), store.Scopes{"work"})
+	server := newHomeServer(t, q, pages)
+
+	var body struct {
+		Waiting map[string]json.RawMessage `json:"waiting"`
+	}
+	require.Equal(t, http.StatusOK, getJSON(t, server, "/api/home", &body))
+	require.JSONEq(t, "[]", string(body.Waiting["proposals"]))
+	require.JSONEq(t, "[]", string(body.Waiting["by_kind"]))
 }
 
 // TestHomeAttentionRendersSentences pins "Needs attention": lint findings aggregated by

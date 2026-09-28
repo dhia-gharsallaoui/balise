@@ -384,7 +384,7 @@ func applyClaimEdits(applied []compile.AppliedClaim, edits []reviewClaimEditJSON
 	}
 
 	var editedIDs []string
-	var warnings []reviewClaimWarningJSON
+	warnings := []reviewClaimWarningJSON{} // [] not null: the web types this as an array
 	for _, e := range edits {
 		idx, ok := byID[e.ID]
 		if !ok {
