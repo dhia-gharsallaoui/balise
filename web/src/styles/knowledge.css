@@ -1,55 +1,102 @@
-/* web/src/styles/knowledge.css — the Knowledge screen: a two-column browse grid (space tree +
-   list/graph), or, when a page is open in List view, a dedicated full-width reading page that
-   replaces the grid outright (see the "Reading view" section below and
-   reading-view-report.md). Grid columns are driven by the `data-cols` attribute set in
-   Knowledge.tsx (1 or 2), not by a plain CSS media query alone, since narrow viewports collapse
-   the space tree above the list rather than beside it. */
+/* web/src/styles/knowledge.css — the Knowledge screen: a browse grid (filter column + list/graph),
+   or, when a page is open in List view, a dedicated full-width reading page that replaces the
+   grid outright (see "Reading view" below and reading-view-report.md). Column count is driven by
+   the `data-cols` attribute Knowledge.tsx sets (1 or 2), not by a media query alone: at one
+   column the filters are not a column at all but a panel folded behind the toolbar's "Filters"
+   button, so the page list is the first thing a phone shows. */
+
+/* ---- Type colour ----
+   One place maps a page type to its hue. Everything that carries a type (a dot, a chip, a row's
+   leading edge) reads --type-colour, so a new type is one line here, not one line per mark. The
+   hue is only ever a mark: labels stay ink. */
+
+[data-type="state"] { --type-colour: var(--type-state); }
+[data-type="decision"] { --type-colour: var(--type-decision); }
+[data-type="gotcha"] { --type-colour: var(--type-gotcha); }
+[data-type="procedure"] { --type-colour: var(--type-procedure); }
+[data-type="issue"] { --type-colour: var(--type-issue); }
+[data-type="incident"] { --type-colour: var(--type-incident); }
+[data-type="note"] { --type-colour: var(--type-note); }
+[data-type="memory"] { --type-colour: var(--type-memory); }
+
+.type-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--type-colour, var(--ink-3));
+}
+
+.type-dot-blank { background: transparent; }
+
+.type-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.status-word {
+  flex: none;
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.status-word[data-historical="true"] { color: var(--amber); }
+
+/* ---- Grid ---- */
 
 .kn-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  min-height: calc(100vh - 60px);
+  min-height: calc(100vh - 64px);
 }
 
 .kn-grid[data-cols="2"] {
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
 }
 
-/* ---- Left: space tree + filters ---- */
+/* ---- Filters: space tree, types, historical ---- */
 
 .kn-left {
-  /* Same automatic-minimum-size fix as .main/.kn-main: a grid item's default
-     min-width is its content's min-content size, which (before the
-     .kn-space-name/.kn-filter-name fix below) was the longest un-truncated
-     space/type name — that alone overflowed a 320px viewport. See
-     batch-G-report.md. */
+  /* A grid item's default min-width is its content's min-content size, which for a long
+     unbroken space name overflowed a 320px viewport (batch-G-report.md). */
   min-width: 0;
-  padding: 18px 10px;
-  border-right: 1px solid var(--line);
-  background: var(--surface-rail);
-  min-height: calc(100vh - 60px);
-  position: sticky;
-  top: 60px;
+  padding: 20px 12px 24px 14px;
+  font-size: 13px;
 }
 
+.kn-grid[data-cols="2"] .kn-left {
+  position: sticky;
+  top: 64px;
+  height: calc(100vh - 64px);
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+}
+
+/* Narrow: the same content as a folded-out panel between the toolbar and the list. */
 .kn-grid[data-cols="1"] .kn-left {
-  border-right: none;
-  border-bottom: 1px solid var(--line);
+  margin-bottom: 16px;
+  padding: 12px 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  animation: rise var(--duration) var(--ease-out) both;
 }
 
 .kn-section-title {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--ink-3);
-  padding: 4px 8px;
-  margin-top: 10px;
-}
-
-.kn-section-title:first-child {
-  margin-top: 0;
+  padding: 0 8px 4px;
 }
 
 .kn-space-row {
@@ -57,88 +104,78 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 8px;
+  min-height: 30px;
+  padding: 4px 8px;
   border-radius: var(--radius-sm);
   font-size: 13px;
   color: var(--ink-2);
   text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
-.kn-space-row:hover {
-  background: var(--surface-2);
-}
+.kn-space-row:hover { background: var(--surface-2); color: var(--ink); }
 
 .kn-space-row[aria-current="true"] {
-  background: var(--surface);
+  background: var(--accent-soft);
   color: var(--ink);
-  font-weight: 600;
-  box-shadow: var(--shadow-card);
+  font-weight: 550;
 }
 
 .kn-space-name {
-  /* Real space names (e.g. "client-acme", "ExpressRoute") have no spaces
-     to wrap on, so without this a long name floors this flex item's shrink
-     at its full text width — found via Task 8's 320px overflow scan; the
-     same pattern as .topbar-heading/.topbar-sub. See batch-G-report.md. */
+  /* Real space names ("client-acme", "ExpressRoute") have no spaces to wrap on, so without
+     this a long name floors the flex item's shrink at its full text width. */
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.kn-space-count {
+.kn-space-count,
+.kn-filter-count {
   margin-left: auto;
+  flex: none;
+  font-size: 12px;
+  font-weight: 400;
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
-  flex: none;
 }
 
-.kn-filters {
-  margin-top: 14px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line-soft);
+.kn-filters,
+.kn-global-lint {
+  margin-top: 18px;
 }
 
 .kn-filter-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 8px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   color: var(--ink-2);
   cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out);
 }
+
+.kn-filter-row:hover { background: var(--surface-2); }
+
+.kn-filter-row input { margin: 0; flex: none; }
 
 .kn-filter-name {
   text-transform: capitalize;
-  /* Same fix as .kn-space-name above. */
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.kn-filter-count {
-  margin-left: auto;
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-  flex: none;
-}
-
 .kn-filter-historical {
-  margin-top: 4px;
-  border-top: 1px solid var(--line-soft);
-  padding-top: 9px;
+  margin-top: 6px;
 }
 
 /* Pages that failed to parse have no row in any list and no page to open — this is the one
    place on screen that can say so. Rendered only when there is something to report. */
-.kn-global-lint {
-  margin-top: 14px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line-soft);
-}
-
 .kn-global-lint-row {
   display: flex;
   flex-direction: column;
@@ -155,412 +192,366 @@
 
 .kn-global-lint-detail {
   color: var(--ink-3);
+  font-family: var(--font-mono);
   overflow-wrap: anywhere;
 }
 
-/* ---- Middle: search + result list ---- */
+/* ---- Main column: toolbar + result list ---- */
 
 .kn-main {
   min-width: 0;
-  padding: 18px 22px 56px;
-  /* Same stacking-context bug the .kn-toolbar comment below documents, extended to cover
-     the rest of this column: at data-cols="1" (narrow, e.g. 768px), .kn-left is
-     position:sticky and shares a stacking context with every non-positioned sibling under
-     the same ancestor, including ResultList's `.page-row`/`.page-open` buttons here in
-     .kn-main. Depending on scroll position, the sticky rail can sit on top for hit-testing
-     even though it paints behind, so a click on `.page-open` can land on `.kn-left` instead
-     (surfaced by visual.spec.ts's narrow-viewport "opening a page replaces them all" test,
-     which needed no force:true and simply timed out). Promoting the whole column to its own
-     positive-z-index stacking context — same fix already applied to .kn-toolbar — makes
-     every descendant, not just the toolbar, hit-test above .kn-left regardless of scroll. */
+  padding: 20px 28px 56px;
+  /* The sticky topbar (and, historically, a sticky filter column at one-column widths) shares
+     a stacking context with this column's buttons; depending on scroll position the sticky box
+     could win hit-testing over .page-open or the view toggle even while painting behind them
+     (visual.spec.ts's narrow test timed out on exactly this). A positive z-index stacking
+     context keeps every control here clickable regardless of scroll. */
   position: relative;
   z-index: 6;
 }
 
-/* Shown when Home's "Needs attention" sends the viewer here for one lint rule — a plain
-   banner naming the filter and a way back to the full list, not a permanent UI fixture. */
+.kn-grid[data-cols="1"] .kn-main { padding: 16px 16px 40px; }
+
+/* Shown when Home's "Needs attention" sends the viewer here for one lint rule: a banner
+   naming the filter and a way back to the full list, not a permanent fixture. */
 .kn-filter-banner {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 12px;
-  padding: 8px 12px;
+  padding: 4px 4px 4px 12px;
   background: var(--accent-soft);
-  color: var(--accent-ink);
+  color: var(--ink);
   border-radius: var(--radius-sm);
   font-size: 13px;
 }
 
-.kn-filter-banner button {
-  margin-left: auto;
-  font-weight: 600;
-  text-decoration: underline;
-}
+.kn-filter-banner .btn { margin-left: auto; }
 
 .kn-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-  /* Stacking-context fix: .kn-toolbar itself has no position, so per the CSS
-     painting order it sits *below* any sibling-tree element that is
-     position:sticky, even ones with no explicit z-index — z-index:auto
-     positioned boxes still out-rank non-positioned in-flow boxes. Two such
-     boxes share this stacking context (.topbar and .kn-grid's own .kn-left
-     are both descendants of the same non-positioned <main>, so nothing
-     separates their stacking): .topbar (shell.css, position:sticky, top:0,
-     z-index:5) and, at data-cols="1", .kn-left (sticky, top:60, full-width in
-     the single-column layout). Confirmed by scrolling: at any scrollY where
-     .kn-toolbar's box geometrically overlaps either sticky rail, the browser
-     reports elementFromPoint() over the visible "Graph" button as the sticky
-     rail, not the button — this is why Playwright needed force:true to click
-     it. Promoting .kn-toolbar to its own positive-z-index stacking context
-     (higher than .topbar's 5) makes it paint, and hit-test, on top of both
-     rails regardless of scroll position. */
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.kn-search-wrap {
   position: relative;
-  z-index: 6;
-}
-
-.kn-search {
-  flex: 1;
+  flex: 1 1 240px;
   min-width: 0;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 13.5px;
+  max-width: 560px;
 }
 
-.kn-search:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.kn-search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-3);
+  pointer-events: none;
 }
 
-.kn-viewmode {
-  display: flex;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  flex: none;
+.field.kn-search { padding-left: 34px; }
+
+.kn-viewmode { flex: none; margin-left: auto; }
+
+.kn-filters-toggle { flex: none; }
+
+.kn-filters-toggle[aria-expanded="true"] {
+  border-color: var(--ink-3);
+  background: var(--surface-2);
 }
 
-.kn-viewmode button {
-  padding: 7px 14px;
-  font-size: 13px;
-  color: var(--ink-2);
-  background: var(--surface);
+/* One column: search gets the full first line, Filters and the view toggle share the second. */
+.kn-grid[data-cols="1"] .kn-search-wrap {
+  flex-basis: 100%;
+  max-width: none;
 }
 
-.kn-viewmode button[aria-pressed="true"] {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  font-weight: 600;
-}
-
-/* ---- Middle: result list, groups, page rows, claims ---- */
+/* ---- Result list: groups and page rows ----
+   Groups are separated by space and a quiet header, rows by a hairline. No box around the
+   group as well: one separator system, not two. */
 
 .result-list {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: var(--shadow-card);
+  animation: rise var(--duration) var(--ease-out) both;
 }
 
-.coverage-note {
-  margin: 0;
-  padding: 10px 16px;
-  font-size: 13px;
-  color: var(--amber);
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--line-soft);
-}
+.result-group + .result-group { margin-top: 26px; }
 
 .result-group-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0;
-  padding: 8px 16px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--line-soft);
-  border-top: 1px solid var(--line-soft);
-  font-size: 12.5px;
+  margin: 0 0 6px;
+  padding: 0 4px;
+  font-size: 13.5px;
   font-weight: 600;
-  color: var(--ink-2);
-  text-transform: capitalize;
+  letter-spacing: -0.005em;
+  color: var(--ink);
 }
 
-.result-group:first-child .result-group-head {
-  border-top: none;
-}
+.result-group-name { text-transform: capitalize; }
 
-.type-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-  background: var(--ink-3);
-}
-
-.type-dot[data-type="state"] { background: var(--type-state); }
-.type-dot[data-type="decision"] { background: var(--type-decision); }
-.type-dot[data-type="gotcha"] { background: var(--type-gotcha); }
-.type-dot[data-type="procedure"] { background: var(--type-procedure); }
-.type-dot[data-type="issue"] { background: var(--type-issue); }
-.type-dot[data-type="incident"] { background: var(--type-incident); }
-.type-dot[data-type="memory"] { background: var(--type-memory); }
-
-.kn-count {
-  color: var(--ink-3);
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
+.coverage-note {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-radius: var(--radius-sm);
 }
 
 .result-rows {
   list-style: none;
   margin: 0;
   padding: 0;
+  border-top: 1px solid var(--line);
 }
 
 .page-row {
-  border-bottom: 1px solid var(--line-soft);
+  position: relative;
+  border-bottom: 1px solid var(--line);
 }
 
-.page-row:last-child {
-  border-bottom: none;
+/* The type's mark: a 3px leading edge, inset from the hairlines so it reads as a tick
+   beside the row rather than a coloured border. */
+.page-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--type-colour, var(--line-strong));
 }
+
+.page-row[data-historical="true"]::before { opacity: 0.45; }
 
 .page-row-head {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 6px;
   align-items: start;
   width: 100%;
-  padding: 11px 16px;
+  padding: 7px 12px 7px 10px;
+  transition: background-color var(--duration-fast) var(--ease-out);
 }
 
-.page-row-head:hover {
-  background: var(--surface-2);
-}
+.page-row-head:hover { background: var(--surface); }
 
 .page-twist {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
   color: var(--ink-3);
-  font-size: 10px;
-  text-align: center;
-  padding: 0;
-  align-self: start;
-  margin-top: 5px;
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
-.page-twist:disabled {
-  visibility: hidden;
-}
+.page-twist:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+
+.page-twist svg { transition: transform var(--duration-fast) var(--ease-out); }
+
+.page-twist[aria-expanded="true"] svg { transform: rotate(90deg); }
+
+.page-twist:disabled { cursor: default; }
 
 .page-open {
   min-width: 0;
+  min-height: 32px;
+  padding: 3px 0;
   text-align: left;
 }
 
 .page-title {
   display: block;
   font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
-.page-sub {
-  display: block;
-  font-size: 12.5px;
-  color: var(--ink-3);
-  margin-top: 2px;
+.page-open:hover .page-title {
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
 }
+
+.page-row[data-historical="true"] .page-title { color: var(--ink-2); }
+
+.page-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.page-slug {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.page-row-head > .status-word { margin-top: 7px; }
 
 .claim-list {
   list-style: none;
   margin: 0;
-  padding: 0 16px 10px 44px;
+  padding: 0 12px 12px 44px;
 }
 
 .claim-row {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: 12px;
   padding: 4px 0;
   font-size: 13.5px;
+  line-height: 1.5;
   color: var(--ink-body);
 }
 
 .claim-text {
   min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
 }
 
-.status-word {
-  flex: none;
-  font-size: 12.5px;
-  color: var(--ink-3);
-  white-space: nowrap;
-}
+.claim-row[data-historical="true"] .claim-text { color: var(--ink-3); }
 
-.status-word[data-historical="true"] {
-  color: var(--amber);
-}
-
-.type-chip {
-  font-size: 12.5px;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-
-.type-chip[data-type="state"] { color: var(--type-state); }
-.type-chip[data-type="decision"] { color: var(--type-decision); }
-.type-chip[data-type="gotcha"] { color: var(--type-gotcha); }
-.type-chip[data-type="procedure"] { color: var(--type-procedure); }
-.type-chip[data-type="issue"] { color: var(--type-issue); }
-.type-chip[data-type="incident"] { color: var(--type-incident); }
-.type-chip[data-type="memory"] { color: var(--type-memory); }
-
-/* ---- Reading view: a dedicated, full-width page ---- */
-/* Supersedes the old 400px `.kn-right` third column (see reading-view-report.md and the
-   comment above `cols` in Knowledge.tsx): PageReader (PageDetail.tsx) is no longer a grid
-   child sharing the screen with the space tree and list at any width — Knowledge.tsx renders
-   it *instead of* `.kn-grid` altogether, so it owns the whole content area under the topbar.
-   `.kn-reader-inner` caps the page at a comfortable reading width and centers it; `.detail-body`
-   below caps the actual prose narrower still — the outer cap just keeps the title, meta table
-   and relations from sprawling edge-to-edge on a wide monitor.
-
-   `.detail-body`'s cap is a literal px value, not `68ch`, because `ch` measures the advance
-   width of the "0" glyph, and Instrument Sans's "0" (9.66px at this size) is much wider than
-   this corpus's average prose character (6.69px, measured in Chrome via canvas
-   `measureText()` over real page bodies): `max-width: 68ch` actually rendered ~98 characters
-   per line, not 68 — confirmed by measuring rendered line lengths with `Range.getClientRects()`
-   against the live app, not by guessing pixel width (see reading-view-report.md). 480px was
-   then chosen the same way and re-measured to land inside the ≤72-char target
-   (balise-docs/02-ui-design-v1.md §7): ~71 characters per line. All of the inner
-   `.detail-*`/`.claim-*`/`.tag-chip` rules are unchanged from the old column. */
+/* ---- Reading view: a dedicated, full-width page ----
+   Knowledge.tsx renders this *instead of* .kn-grid, so it owns the whole content area. Title,
+   claims and body share one measure (.kn-reader-main) so their edges align; the metadata is an
+   aside to the right from 1100px, and falls below the body under it. */
 
 .kn-reader {
-  min-height: calc(100vh - 60px);
+  min-height: calc(100vh - 64px);
   background: var(--surface);
-  padding: 28px clamp(20px, 4vw, 64px) 64px;
+  padding: 20px clamp(16px, 4vw, 56px) 64px;
 }
 
 .kn-reader-inner {
-  max-width: 860px;
-  margin: 0 auto;
+  --measure: 68ch;
+  display: grid;
+  grid-template-columns: minmax(0, var(--measure));
+  grid-template-areas: "crumb" "main" "aside" "rel";
+  justify-content: center;
+  font-size: 14.5px;
+  animation: rise var(--duration) var(--ease-out) both;
+}
+
+@media (min-width: 1100px) {
+  .kn-reader-inner {
+    grid-template-columns: minmax(0, var(--measure)) 232px;
+    grid-template-areas: "crumb crumb" "main aside" "rel aside";
+    grid-template-rows: auto auto 1fr;
+    column-gap: 56px;
+  }
 }
 
 .detail-crumb {
-  margin-bottom: 18px;
+  grid-area: crumb;
+  margin: 0 0 22px -8px;
 }
 
-.detail-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent-ink);
-  padding: 4px 8px;
-  margin-left: -8px;
-  border-radius: var(--radius-sm);
-}
-
-.detail-back::before {
-  content: "←";
-}
-
-.detail-back:hover {
-  background: var(--surface-2);
-}
+.kn-reader-main { grid-area: main; min-width: 0; }
 
 .detail-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 4px 12px;
+  margin-bottom: 10px;
 }
 
+/* The space is a human name ("Data & Storage"), not an identifier, so it stays sans. */
 .detail-scope {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--ink-3);
 }
 
 .detail-title {
   margin: 0;
-  font-family: var(--font-display);
-  font-weight: 400;
+  font-family: var(--font-ui);
+  font-weight: 650;
   font-size: 26px;
-  line-height: 1.2;
-  letter-spacing: -0.005em;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
   color: var(--ink);
-  /* Belt-and-suspenders alongside .rich-code's own overflow-wrap (global.css): a long
-     identifier can also appear as plain title text with no backticks at all, so the wrap
-     has to work at the title level too, not just on the inline <code> it sometimes wraps. */
+  /* A long identifier can appear as plain title text with no backticks, so the wrap has to
+     work at the title level too, not just on the inline <code> it sometimes wraps. */
   overflow-wrap: anywhere;
 }
 
-.detail-line {
-  font-size: 13px;
-  color: var(--ink-2);
-  margin-top: 8px;
-}
-
 .detail-warning {
-  margin: 12px 0 0;
-  padding: 8px 12px;
+  margin: 14px 0 0;
+  padding: 9px 12px;
   border-radius: var(--radius-sm);
-  background: var(--accent-soft);
+  background: var(--amber-soft);
   color: var(--amber);
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .detail-section-title {
+  margin: 28px 0 8px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ink-3);
-  margin: 20px 0 4px;
 }
 
 .claim-ledger {
   list-style: none;
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--line-soft);
+  border-top: 1px solid var(--line);
 }
 
 .claim-ledger .claim-row {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line-soft);
+  padding: 10px 0;
+  gap: 14px;
+  font-size: 14.5px;
+  border-bottom: 1px solid var(--line);
+}
+
+.claim-index {
+  flex: none;
+  width: 2ch;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-3);
 }
 
 .detail-body {
-  margin-top: 22px;
-  font-size: 14.5px;
-  line-height: 1.65;
-  max-width: 480px;
+  margin-top: 26px;
+  line-height: 1.68;
   color: var(--ink-body);
-  /* body_md's prose (parseBody/markdown.ts) strips backtick code spans down to plain text
-     rather than rendering them as <code> — so a long unbroken identifier can land directly
-     in a paragraph with no .rich-code to carry the wrap rule. Setting it here covers every
-     child (p, h3, li) that isn't already handled by .detail-body pre's own overflow-x. */
+  /* parseBody strips backtick code spans to plain text, so a long unbroken identifier can land
+     directly in a paragraph with no .rich-code to carry the wrap rule. */
   overflow-wrap: anywhere;
 }
 
+.detail-body > :first-child { margin-top: 0; }
+
 .detail-body h3 {
-  margin: 18px 0 6px;
-  font-size: 13px;
+  margin: 22px 0 6px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--ink-2);
+  letter-spacing: -0.01em;
+  color: var(--ink);
 }
 
-.detail-body p {
-  margin: 0 0 10px;
-}
+.detail-body p { margin: 0 0 12px; }
 
 .detail-body ul {
-  margin: 4px 0 10px;
+  margin: 4px 0 12px;
   padding-left: 20px;
 }
 
@@ -571,28 +562,58 @@
   padding: 10px 12px;
   overflow-x: auto;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.detail-aside {
+  grid-area: aside;
+  min-width: 0;
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+@media (min-width: 1100px) {
+  .detail-aside {
+    align-self: start;
+    position: sticky;
+    top: 84px;
+    margin-top: 0;
+    padding-top: 2px;
+    border-top: 0;
+  }
 }
 
 .detail-meta {
-  margin-top: 24px;
-  background: var(--surface-2);
-  border: 1px solid var(--line-soft);
-  border-radius: 10px;
-  padding: 14px 16px;
-  font-size: 13.5px;
+  margin: 0;
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 7px 14px;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 10px 12px;
+  font-size: 13px;
+}
+
+@media (min-width: 1100px) {
+  /* Stacked label over value: 232px is too narrow for a label column plus a tag path. */
+  .detail-meta { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .detail-meta dd + dt { margin-top: 12px; }
 }
 
 .detail-meta dt {
+  font-size: 12px;
   color: var(--ink-3);
 }
 
 .detail-meta dd {
   margin: 0;
+  min-width: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
 }
+
+.detail-mono { font-family: var(--font-mono); font-size: 12.5px; }
+
+.detail-unset { color: var(--ink-3); }
 
 .detail-tags {
   display: flex;
@@ -601,33 +622,42 @@
 }
 
 .tag-chip {
+  font-family: var(--font-mono);
   font-size: 12px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 1px 7px;
+  background: var(--surface-2);
+  border-radius: var(--radius-xs);
+  padding: 1px 6px;
   color: var(--ink-2);
-  /* Tags are slash-delimited paths (e.g. "vendor/azure/ergw") with no spaces, so the browser
-     has no natural break point and treats the whole tag as one unbreakable word — the same
-     320px overflow this file's .detail-title/.detail-body comments describe, just on a chip
-     narrower than the viewport instead of a heading. max-width keeps a single chip from ever
-     forcing its .detail-tags flex row wider than the reader column that contains it. */
+  /* Tags are slash-delimited paths with no spaces, so without this one chip could force the
+     row wider than the column. */
   overflow-wrap: anywhere;
   max-width: 100%;
 }
 
-.detail-relations {
-  margin-top: 12px;
-  border-top: 1px solid var(--line);
-  padding-top: 10px;
+.kn-reader-rel {
+  grid-area: rel;
+  min-width: 0;
+  margin-top: 8px;
 }
+
+.detail-relations {
+  margin-top: 20px;
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
+}
+
+.detail-relations .detail-section-title { margin-top: 14px; }
 
 .detail-relation {
   display: block;
-  padding: 1px 0;
-  color: var(--accent);
+  padding: 3px 0;
+  font-size: 14px;
+  color: var(--ink);
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--duration-fast) var(--ease-out);
 }
 
-.detail-relation:hover {
-  text-decoration: underline;
-}
+.detail-relation:hover { text-decoration-color: var(--ink); }

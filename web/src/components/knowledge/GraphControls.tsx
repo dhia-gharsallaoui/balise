@@ -1,3 +1,5 @@
+import { plural } from "../../lib/plural";
+
 // Depth control for the ego-graph (spec §6.7 F-61): 1 or 2 hops from the centre,
 // defaulting to 1. Showing the direct-neighbour count here means the user knows what a
 // depth-1 view is hiding even before they switch to depth 2.
@@ -15,7 +17,7 @@ export function GraphControls({
 }) {
   return (
     <div className="graph-controls">
-      <div className="graph-depth" role="group" aria-label="Neighbourhood depth">
+      <div className="segmented graph-depth" role="group" aria-label="Neighbourhood depth">
         {DEPTHS.map((d) => (
           <button
             key={d}
@@ -27,9 +29,7 @@ export function GraphControls({
           </button>
         ))}
       </div>
-      <span className="graph-neighbour-count">
-        {directNeighbourCount} direct {directNeighbourCount === 1 ? "neighbour" : "neighbours"}
-      </span>
+      <span className="graph-neighbour-count">{plural(directNeighbourCount, "direct neighbour")}</span>
     </div>
   );
 }

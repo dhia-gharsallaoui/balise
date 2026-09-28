@@ -6,11 +6,13 @@ import type { HomePageRef, HomeResponse, TreeResponse } from "../lib/types";
 import { AgentsScreen } from "./agents/AgentsScreen";
 import { Home } from "./home/Home";
 import { Knowledge } from "./knowledge/Knowledge";
-import { Rail, SECTIONS, type Section } from "./Rail";
+import { Rail, SECTIONS, THEME_OPTIONS, type Section } from "./Rail";
 import { ReviewScreen } from "./review/ReviewScreen";
 import { SettingsScreen } from "./settings/SettingsScreen";
 import { SourcesScreen } from "./sources/SourcesScreen";
 import { EmptyState } from "./ui/EmptyState";
+import { ErrorBoundary } from "./ui/ErrorBoundary";
+import { plural } from "../lib/plural";
 import "../styles/shell.css";
 
 // The pages a "Needs attention" sentence points at, carried over to Knowledge as a filter
@@ -20,8 +22,6 @@ interface AttentionFilter {
   pages: HomePageRef[];
   label: string;
 }
-
-const CYCLE: Preference[] = ["system", "light", "dark"];
 
 const SUBTITLES: Record<Section, string> = {
   Home: "What needs you today",
@@ -50,6 +50,9 @@ export function AppShell() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { applyTheme(preference); }, [preference]);
+
+  // The tab names the screen, so several open Balise tabs stay distinguishable.
+  useEffect(() => { document.title = `${section} · Balise`; }, [section]);
 
   // Changing section is a discrete navigation, so it pushes a history entry — back returns
   // you to the screen you came from. It also resets every Knowledge-owned param: those
@@ -94,25 +97,39 @@ export function AppShell() {
 
   const scopes = collectScopes(tree);
   const subtitle = section === "Knowledge"
-    ? `${tree?.spaces.reduce((n, s) => n + s.count, 0) ?? 0} pages across ${scopes.length} scopes`
+    ? `${plural(tree?.spaces.reduce((n, s) => n + s.count, 0) ?? 0, "page")} across ${plural(scopes.length, "scope")}`
     : SUBTITLES[section];
+  const nextTheme = THEME_OPTIONS[(THEME_OPTIONS.findIndex((o) => o.value === preference) + 1) % THEME_OPTIONS.length];
 
   return (
     <div className="app">
+      <a className="skip-link" href="#main">Skip to content</a>
       <Rail
         active={section}
         onSelect={setSection}
         scopes={scopes}
         preference={preference}
-        onCycleTheme={() => setPreference(CYCLE[(CYCLE.indexOf(preference) + 1) % CYCLE.length])}
+        onSetTheme={setPreference}
+        reviewCount={home?.waiting.total ?? 0}
       />
-      <main className="main">
+      <main className="main" id="main" tabIndex={-1}>
         <header className="topbar">
+          <span className="topbar-mark rail-mark" aria-hidden="true" />
           <div className="topbar-heading">
-            <div className="topbar-title">{section}</div>
-            <div className="topbar-sub">{subtitle}</div>
+            <h1 className="topbar-title">{section}</h1>
+            {subtitle ? <div className="topbar-sub">{subtitle}</div> : null}
           </div>
+          {/* Phones have no room for the rail's theme control; this one cycles instead. */}
+          <button
+            type="button"
+            className="btn btn-quiet btn-sm topbar-theme"
+            onClick={() => setPreference(nextTheme.value)}
+            aria-label={`Theme: ${preference}. Switch to ${nextTheme.label.toLowerCase()}.`}
+          >
+            <nextTheme.icon size={16} aria-hidden="true" />
+          </button>
         </header>
+        <ErrorBoundary resetKey={section}>
         {error ? (
           <EmptyState title="Could not reach the server." hint={`${error}. Is balise serve running?`} />
         ) : section === "Knowledge" ? (
@@ -144,6 +161,7 @@ export function AppShell() {
             hint="The Knowledge section is what this slice builds."
           />
         )}
+        </ErrorBoundary>
       </main>
     </div>
   );

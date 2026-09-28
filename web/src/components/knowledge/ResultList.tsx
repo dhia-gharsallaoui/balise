@@ -72,8 +72,8 @@ export function ResultList({ groups, rows, query, coverage, onOpen }: Props) {
         <section key={group.type} className="result-group">
           <h3 className="result-group-head">
             <span className="type-dot" data-type={group.type} aria-hidden="true" />
-            <span>{group.type}</span>
-            <span className="kn-count">{group.count}</span>
+            <span className="result-group-name">{group.type}</span>
+            <span className="count">{group.count}</span>
           </h3>
           <ul className="result-rows">
             {group.pages.map((page) => (

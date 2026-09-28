@@ -428,4 +428,44 @@ describe("AgentsScreen", () => {
     expect(await screen.findByText(/this agent's access was revoked/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Revoke" })).toBeNull();
   });
+
+  it("places Revoke after the tabs, in a separate Danger footer, not ahead of routine actions", async () => {
+    vi.stubGlobal("fetch", mockFetch());
+    render(<AgentsScreen />);
+    await screen.findByRole("heading", { name: "Claude Code" });
+    const tablist = screen.getByRole("tablist", { name: "Agent details" });
+    const revoke = screen.getByRole("button", { name: "Revoke" });
+    // DOCUMENT_POSITION_FOLLOWING: the revoke button comes after the tab bar in reading order.
+    expect(tablist.compareDocumentPosition(revoke) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Revoke access" })).toBeTruthy();
+  });
+
+  it("shows the first eight activity rows, then reveals the rest on request", async () => {
+    const many: AgentActivityResponse = {
+      agent_name: "Claude Code",
+      activity: Array.from({ length: 11 }, (_, i) => ({
+        id: i + 1,
+        when: "2026-09-19T09:40:00Z",
+        tool: "search",
+        scopes: ["work"],
+        query: `query number ${i + 1}`,
+        result_count: 1,
+        latency_ms: 10,
+      })),
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes("/activity") ? jsonResponse(many) : jsonResponse(AGENTS),
+      ),
+    );
+    const user = userEvent.setup();
+    render(<AgentsScreen />);
+    expect(await screen.findByText(/looked up: query number 8$/i)).toBeTruthy();
+    expect(screen.queryByText(/looked up: query number 9$/i)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Show 3 older entries" }));
+    expect(screen.getByText(/looked up: query number 11$/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /older entr/i })).toBeNull();
+  });
 });

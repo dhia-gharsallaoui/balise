@@ -231,10 +231,13 @@ describe("SettingsScreen", () => {
     render(<SettingsScreen />);
     await screen.findByText("incident");
     await user.click(screen.getByRole("tab", { name: "Sources and storage" }));
-    expect(await screen.findByDisplayValue(/\/tmp\/balise-live \(git\)/)).toBeTruthy();
-    expect(screen.getByDisplayValue("139 pages")).toBeTruthy();
-    expect(screen.getByDisplayValue("27 commits")).toBeTruthy();
-    expect(screen.getByDisplayValue("localhost / balise")).toBeTruthy();
+    // A read-only definition list now, not disabled inputs: plain text values, the path and
+    // database in their own elements so they can render in mono.
+    expect(await screen.findByText("/tmp/balise-live")).toBeTruthy();
+    expect(screen.getByText("git repository")).toBeTruthy();
+    expect(screen.getByText("139 pages")).toBeTruthy();
+    expect(screen.getByText("27 commits")).toBeTruthy();
+    expect(screen.getByText("localhost / balise")).toBeTruthy();
     expect(document.body.innerHTML).not.toMatch(/minio/i);
   });
 
@@ -246,7 +249,7 @@ describe("SettingsScreen", () => {
     await user.click(screen.getByRole("tab", { name: "Models" }));
     // Both the gateway and the API key fields are unset in this fixture, so "Not set" is
     // expected to appear twice — disambiguate by each field's own explanatory title instead.
-    const notSet = await screen.findAllByDisplayValue("Not set");
+    const notSet = await screen.findAllByText("Not set");
     expect(notSet.length).toBe(2);
     expect(screen.getByTitle(/ANTHROPIC_BASE_URL/)).toBeTruthy();
     expect(screen.getByTitle(/ANTHROPIC_API_KEY/)).toBeTruthy();

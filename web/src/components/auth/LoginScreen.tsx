@@ -1,5 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, login } from "../../lib/api";
+import { WarningCircle } from "@phosphor-icons/react";
+// shell.css supplies .rail-mark, the CSS-drawn Balise mark, so the login screen shows the same
+// mark the rail does without AppShell (which normally imports it) being mounted.
+import "../../styles/shell.css";
 import "../../styles/auth.css";
 
 interface LoginScreenProps {
@@ -17,6 +21,13 @@ export function LoginScreen({ onSuccess }: LoginScreenProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  // The input is disabled while a login is in flight, which drops focus. Once a failed
+  // attempt re-enables it, put the cursor back so the owner can simply retype.
+  useEffect(() => {
+    if (error && !busy) passwordRef.current?.focus();
+  }, [error, busy]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,13 +53,18 @@ export function LoginScreen({ onSuccess }: LoginScreenProps) {
 
   return (
     <div className="auth-page">
-      <form className="auth-card" onSubmit={handleSubmit}>
-        <h1 className="auth-title">Balise</h1>
+      <form className="panel auth-card" onSubmit={handleSubmit}>
+        <div className="auth-brand">
+          <span className="rail-mark" aria-hidden="true" />
+          <h1 className="auth-title">Balise</h1>
+        </div>
         <p className="auth-subtitle">Enter the owner password to continue.</p>
         <label className="auth-field" htmlFor="auth-password">
-          <span>Password</span>
+          <span className="auth-label">Password</span>
           <input
             id="auth-password"
+            ref={passwordRef}
+            className="field"
             type="password"
             autoComplete="current-password"
             autoFocus
@@ -56,14 +72,17 @@ export function LoginScreen({ onSuccess }: LoginScreenProps) {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             disabled={busy}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? "auth-error" : undefined}
           />
         </label>
         {error ? (
-          <p className="auth-error" role="alert">
+          <p id="auth-error" className="auth-error" role="alert">
+            <WarningCircle size={16} aria-hidden="true" className="auth-error-icon" />
             {error}
           </p>
         ) : null}
-        <button type="submit" className="auth-submit" disabled={busy || password.length === 0}>
+        <button type="submit" className="btn btn-primary auth-submit" disabled={busy || password.length === 0}>
           {busy ? "Checking…" : "Unlock"}
         </button>
       </form>

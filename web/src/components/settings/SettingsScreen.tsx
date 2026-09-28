@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { plural } from "../../lib/plural";
 import { ApiError, createScope, fetchSettings } from "../../lib/api";
 import type { SettingsResponse } from "../../lib/types";
+import { PencilSimple, Plus } from "@phosphor-icons/react";
 import { EmptyState } from "../ui/EmptyState";
 import "../../styles/settings.css";
 
@@ -60,13 +61,11 @@ function staleLabel(days: number): string {
   return days > 0 ? `Stale after ${plural(days, "day")}` : "No staleness rule";
 }
 
-function fieldsLabel(fields: string[]): string {
-  return fields.length ? `Fields: ${fields.join(", ")}` : "No extra fields";
-}
 
 function readByLabel(agents: string[]): string {
   return agents.length ? `Read by ${joinWithAnd(agents)}.` : "Not read by any agent yet.";
 }
+
 
 export function SettingsScreen() {
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
@@ -105,14 +104,14 @@ export function SettingsScreen() {
 
   return (
     <div className="settings-screen">
-      <nav className="settings-nav" role="tablist" aria-label="Settings sections">
+      <nav className="settings-nav segmented" role="tablist" aria-label="Settings sections">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             role="tab"
             aria-selected={tab === t.id}
-            className={`settings-tab${tab === t.id ? " is-active" : ""}`}
+            className="settings-tab"
             onClick={() => setTab(t.id)}
           >
             {t.label}
@@ -120,7 +119,8 @@ export function SettingsScreen() {
         ))}
       </nav>
 
-      <div className="settings-content">
+      {/* Keyed on the tab so the one entrance animation replays when the section changes. */}
+      <div className="settings-content" key={tab}>
         {tab === "structure" ? <StructureTab settings={settings} /> : null}
         {tab === "scopes" ? <ScopesTab settings={settings} onScopeCreated={loadSettings} /> : null}
         {tab === "storage" ? <StorageTab settings={settings} /> : null}
@@ -131,112 +131,161 @@ export function SettingsScreen() {
   );
 }
 
+function CardHead({
+  id,
+  title,
+  count,
+  children,
+}: {
+  id: string;
+  title: string;
+  count?: number;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="settings-card-head">
+      <h2 id={id}>{title}</h2>
+      {count !== undefined ? <span className="count">{count}</span> : null}
+      {children}
+    </div>
+  );
+}
+
+function EditStub({ title }: { title: string }) {
+  return (
+    <button type="button" className="btn btn-quiet btn-sm settings-edit" disabled title={title}>
+      <PencilSimple size={14} aria-hidden="true" />
+      Edit
+    </button>
+  );
+}
+
+function FieldList({ fields }: { fields: string[] }) {
+  if (fields.length === 0) return <span>No extra fields</span>;
+  return (
+    <span>
+      Fields:{" "}
+      {fields.map((f, i) => (
+        <span key={f}>
+          <code className="settings-mono">{f}</code>
+          {i < fields.length - 1 ? ", " : null}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function StructureTab({ settings }: { settings: SettingsResponse }) {
   return (
     <>
-      <section className="settings-card" aria-labelledby="settings-types-heading">
-        <div className="settings-card-head">
-          <h2 id="settings-types-heading">Page types</h2>
-          <span className="settings-card-count">{settings.types.length}</span>
-          <button type="button" className="settings-add" disabled title={TYPES_TITLE}>
-            Add a type
-          </button>
-        </div>
-        <p className="settings-card-desc">
-          A type says what a page is, which fields it carries, and how long before it counts as
-          stale.
-        </p>
-        <ul className="settings-rows">
-          {settings.types.map((t) => (
-            <li key={t.name} className="settings-row settings-type-row">
-              <span className="settings-dot" data-type={t.name} aria-hidden="true" />
-              <div className="settings-row-body">
-                <div className="settings-row-title">
-                  <span className="settings-row-name">{t.name}</span>
-                  <span className="settings-row-count">{plural(t.count, "page")}</span>
-                </div>
-                {t.description ? <p className="settings-row-desc">{t.description}</p> : null}
-                <p className="settings-row-sub">
-                  {fieldsLabel(t.fields)} · {staleLabel(t.stale_after_days)}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="settings-edit"
-                disabled
-                title={TYPES_TITLE}
-              >
-                Edit
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <PageTypesCard settings={settings} />
+      <TagsCard settings={settings} />
+      <RelationsCard settings={settings} />
+    </>
+  );
+}
 
-      <section className="settings-card" aria-labelledby="settings-tags-heading">
-        <div className="settings-card-head">
-          <h2 id="settings-tags-heading">Tags</h2>
-          <span className="settings-card-count">{settings.tag_groups.length}</span>
-        </div>
-        <p className="settings-card-desc">
-          Tags group pages by facet. Groups come from defaults/facets/; values are however
-          pages have actually been tagged.
-        </p>
-        <ul className="settings-rows">
-          {settings.tag_groups.map((g) => (
-            <li key={g.name} className="settings-row">
-              <div className="settings-row-body">
-                <div className="settings-row-title">
-                  <span className="settings-row-name">{g.name}</span>
-                  <span className="settings-row-count">{plural(g.top_level_count, "value")}</span>
-                </div>
+function PageTypesCard({ settings }: { settings: SettingsResponse }) {
+  return (
+    <section className="settings-card panel" aria-labelledby="settings-types-heading">
+      <CardHead id="settings-types-heading" title="Page types" count={settings.types.length}>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm settings-add"
+          disabled
+          title={TYPES_TITLE}
+        >
+          <Plus size={14} aria-hidden="true" />
+          Add a type
+        </button>
+      </CardHead>
+      <p className="settings-card-desc">
+        A type says what a page is, which fields it carries, and how long before it counts as
+        stale.
+      </p>
+      <ul className="settings-rows">
+        {settings.types.map((t) => (
+          <li key={t.name} className="settings-row settings-type-row">
+            <span className="settings-dot" data-type={t.name} aria-hidden="true" />
+            <div className="settings-row-body">
+              <div className="settings-row-title">
+                <span className="settings-row-name">{t.name}</span>
+                <span className="count">{plural(t.count, "page")}</span>
               </div>
-            </li>
-          ))}
-        </ul>
-        {settings.tags.length > 0 ? (
-          <>
-            <h3 className="settings-subhead">In use</h3>
-            <ul className="settings-tag-chips">
-              {settings.tags.map((tag) => (
-                <li key={tag.name} className="settings-tag-chip">
-                  <span className="settings-tag-chip-name">{tag.name}</span>
-                  <span className="settings-tag-chip-count">{tag.count}</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <p className="settings-empty-note">No page has been tagged yet.</p>
-        )}
-      </section>
+              {t.description ? <p className="settings-row-desc">{t.description}</p> : null}
+              <p className="settings-row-sub">
+                <FieldList fields={t.fields} />
+                <span aria-hidden="true"> · </span>
+                <span>{staleLabel(t.stale_after_days)}</span>
+              </p>
+            </div>
+            <EditStub title={TYPES_TITLE} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
-      <section className="settings-card" aria-labelledby="settings-relations-heading">
-        <div className="settings-card-head">
-          <h2 id="settings-relations-heading">Relations</h2>
-          <span className="settings-card-count">{settings.relations.length}</span>
-        </div>
-        <p className="settings-card-desc">
-          A relation connects two pages. Each kind below is in real use somewhere in this vault.
-        </p>
-        {settings.relations.length > 0 ? (
-          <ul className="settings-rows">
-            {settings.relations.map((r) => (
-              <li key={r.kind} className="settings-row">
-                <div className="settings-row-body">
-                  <div className="settings-row-title">
-                    <span className="settings-row-name settings-mono">{r.kind}</span>
-                    <span className="settings-row-count">{plural(r.count, "edge")}</span>
-                  </div>
-                </div>
+function TagsCard({ settings }: { settings: SettingsResponse }) {
+  return (
+    <section className="settings-card panel" aria-labelledby="settings-tags-heading">
+      <CardHead id="settings-tags-heading" title="Tags" count={settings.tag_groups.length} />
+      <p className="settings-card-desc">
+        Tags group pages by facet. Groups come from <code className="settings-mono">defaults/facets/</code>;
+        values are however pages have actually been tagged.
+      </p>
+      <ul className="settings-rows">
+        {settings.tag_groups.map((g) => (
+          <li key={g.name} className="settings-row settings-row-compact">
+            <span className="settings-row-name">{g.name}</span>
+            <span className="settings-row-meta">{plural(g.top_level_count, "value")}</span>
+          </li>
+        ))}
+      </ul>
+      {settings.tags.length > 0 ? (
+        <>
+          <h3 className="settings-subhead">In use</h3>
+          <ul className="settings-tag-chips">
+            {settings.tags.map((tag) => (
+              <li key={tag.name} className="settings-tag-chip">
+                <span className="settings-tag-chip-name">{tag.name}</span>
+                <span className="settings-tag-chip-count">{tag.count}</span>
               </li>
             ))}
           </ul>
-        ) : (
-          <p className="settings-empty-note">No page links to another one yet.</p>
-        )}
-      </section>
-    </>
+        </>
+      ) : (
+        <p className="settings-empty-note">No page has been tagged yet.</p>
+      )}
+    </section>
+  );
+}
+
+function RelationsCard({ settings }: { settings: SettingsResponse }) {
+  return (
+    <section className="settings-card panel" aria-labelledby="settings-relations-heading">
+      <CardHead
+        id="settings-relations-heading"
+        title="Relations"
+        count={settings.relations.length}
+      />
+      <p className="settings-card-desc">
+        A relation connects two pages. Each kind below is in real use somewhere in this vault.
+      </p>
+      {settings.relations.length > 0 ? (
+        <ul className="settings-rows">
+          {settings.relations.map((r) => (
+            <li key={r.kind} className="settings-row settings-row-compact">
+              <span className="settings-row-name settings-mono">{r.kind}</span>
+              <span className="settings-row-meta">{plural(r.count, "edge")}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="settings-empty-note">No page links to another one yet.</p>
+      )}
+    </section>
   );
 }
 
@@ -248,87 +297,34 @@ function ScopesTab({
   onScopeCreated: () => void;
 }) {
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addName, setAddName] = useState("");
-  const [addBusy, setAddBusy] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
-
-  function openAddForm() {
-    setAddName("");
-    setAddError(null);
-    setShowAddForm(true);
-  }
-
-  function closeAddForm() {
-    setShowAddForm(false);
-    setAddName("");
-    setAddError(null);
-  }
-
-  async function handleAddSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const name = addName.trim();
-    if (!name) {
-      setAddError("Name the scope before adding it.");
-      return;
-    }
-    setAddBusy(true);
-    setAddError(null);
-    try {
-      await createScope(name);
-      closeAddForm();
-      onScopeCreated();
-    } catch (err) {
-      setAddError(err instanceof ApiError ? err.message : "Could not add this scope. Try again.");
-    } finally {
-      setAddBusy(false);
-    }
-  }
 
   return (
-    <section className="settings-card" aria-labelledby="settings-scopes-heading">
-      <div className="settings-card-head">
-        <h2 id="settings-scopes-heading">Scopes</h2>
-        <span className="settings-card-count">{settings.scopes.length}</span>
+    <section className="settings-card panel" aria-labelledby="settings-scopes-heading">
+      <CardHead id="settings-scopes-heading" title="Scopes" count={settings.scopes.length}>
         <button
           type="button"
-          className="settings-add"
+          className={`btn btn-sm settings-add ${showAddForm ? "btn-quiet" : "btn-secondary"}`}
           aria-expanded={showAddForm}
-          onClick={() => (showAddForm ? closeAddForm() : openAddForm())}
+          onClick={() => setShowAddForm((open) => !open)}
         >
+          {showAddForm ? null : <Plus size={14} aria-hidden="true" />}
           {showAddForm ? "Cancel" : "Add a scope"}
         </button>
-      </div>
+      </CardHead>
       <p className="settings-card-desc">
         A scope is a top-level folder. An agent is given whole scopes to read; nothing crosses
         between them.
       </p>
 
+      {/* Unmounting the form on close is what discards a half-typed name: it owns its state. */}
       {showAddForm ? (
-        <form className="settings-add-form" onSubmit={handleAddSubmit}>
-          <div className="settings-form-field">
-            <label htmlFor="settings-add-scope-name">Name</label>
-            <input
-              id="settings-add-scope-name"
-              type="text"
-              value={addName}
-              onChange={(e) => setAddName(e.target.value)}
-              maxLength={100}
-            />
-          </div>
-          {addError ? (
-            <p className="settings-form-error" role="alert">
-              {addError}
-            </p>
-          ) : null}
-          <div className="settings-form-actions">
-            <button type="submit" className="settings-form-submit" disabled={addBusy}>
-              {addBusy ? "Adding…" : "Add scope"}
-            </button>
-            <button type="button" className="settings-form-cancel" onClick={closeAddForm}>
-              Cancel
-            </button>
-          </div>
-        </form>
+        <AddScopeForm
+          onClose={() => setShowAddForm(false)}
+          onCreated={() => {
+            setShowAddForm(false);
+            onScopeCreated();
+          }}
+        />
       ) : null}
 
       <ul className="settings-rows">
@@ -342,13 +338,11 @@ function ScopesTab({
               <div className="settings-row-title">
                 <span className="settings-row-name">{s.name}</span>
                 <span className="settings-mono settings-row-folder">{s.folder}</span>
-                <span className="settings-row-count">{plural(s.count, "page")}</span>
+                <span className="count">{plural(s.count, "page")}</span>
               </div>
               <p className="settings-row-sub">{readByLabel(s.agents)}</p>
             </div>
-            <button type="button" className="settings-edit" disabled title={SCOPES_EDIT_TITLE}>
-              Edit
-            </button>
+            <EditStub title={SCOPES_EDIT_TITLE} />
           </li>
         ))}
       </ul>
@@ -356,63 +350,107 @@ function ScopesTab({
   );
 }
 
+function AddScopeForm({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Name the scope before adding it.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await createScope(trimmed);
+      onCreated();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not add this scope. Try again.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="settings-add-form" onSubmit={handleSubmit} noValidate>
+      <div className="settings-form-field">
+        <label htmlFor="settings-add-scope-name">Name</label>
+        <input
+          id="settings-add-scope-name"
+          className="field settings-mono"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={100}
+          placeholder="e.g. ops…"
+          aria-describedby="settings-add-scope-help"
+          aria-invalid={error ? true : undefined}
+        />
+        <p id="settings-add-scope-help" className="settings-form-help">
+          Becomes a top-level folder of the same name. It cannot be renamed later.
+        </p>
+      </div>
+      {error ? (
+        <p className="settings-form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className="settings-form-actions">
+        <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
+          {busy ? "Adding…" : "Add scope"}
+        </button>
+        <button type="button" className="btn btn-quiet btn-sm" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function DefRow({ label, title, children }: { label: string; title?: string; children: ReactNode }) {
+  return (
+    <div className="settings-def-row">
+      <dt>{label}</dt>
+      <dd title={title}>{children}</dd>
+    </div>
+  );
+}
+
+function Unset({ children = "Not set" }: { children?: ReactNode }) {
+  return <span className="settings-unset">{children}</span>;
+}
+
 function StorageTab({ settings }: { settings: SettingsResponse }) {
   const { sources } = settings;
-  const gitLabel = sources.is_git_repo ? "git" : "not a git repository";
-  const commitsLabel = sources.is_git_repo
-    ? plural(sources.commit_count, "commit")
-    : "No commit history (not a git repository)";
   return (
-    <section className="settings-card" aria-labelledby="settings-storage-heading">
-      <div className="settings-card-head">
-        <h2 id="settings-storage-heading">Sources and storage</h2>
-      </div>
+    <section className="settings-card panel" aria-labelledby="settings-storage-heading">
+      <CardHead id="settings-storage-heading" title="Sources and storage" />
       <p className="settings-card-desc">
         Where this vault's pages actually live. Read-only: change it by restarting
         balise serve with different flags, not from this screen.
       </p>
-      <dl className="settings-field-grid">
-        <div className="settings-field-row">
-          <dt>Vault</dt>
-          <dd>
-            <input
-              className="settings-field-value"
-              value={`${sources.vault_path} (${gitLabel})`}
-              disabled
-              readOnly
-              title="Set by the path balise serve was started with."
-            />
-          </dd>
-        </div>
-        <div className="settings-field-row">
-          <dt>Pages</dt>
-          <dd>
-            <input
-              className="settings-field-value"
-              value={plural(sources.page_count, "page")}
-              disabled
-              readOnly
-            />
-          </dd>
-        </div>
-        <div className="settings-field-row">
-          <dt>History</dt>
-          <dd>
-            <input className="settings-field-value" value={commitsLabel} disabled readOnly />
-          </dd>
-        </div>
-        <div className="settings-field-row">
-          <dt>Database</dt>
-          <dd>
-            <input
-              className="settings-field-value"
-              value={`${sources.db_host} / ${sources.db_name}`}
-              disabled
-              readOnly
-              title="Set by BALISE_DSN. Never shows a password."
-            />
-          </dd>
-        </div>
+      <dl className="settings-def-list">
+        <DefRow label="Vault" title="Set by the path balise serve was started with.">
+          <span className="settings-mono settings-def-value">{sources.vault_path}</span>
+          <span className="settings-def-note">
+            {sources.is_git_repo ? "git repository" : "not a git repository"}
+          </span>
+        </DefRow>
+        <DefRow label="Pages">{plural(sources.page_count, "page")}</DefRow>
+        <DefRow label="History">
+          {sources.is_git_repo ? (
+            plural(sources.commit_count, "commit")
+          ) : (
+            <Unset>No commit history</Unset>
+          )}
+        </DefRow>
+        <DefRow label="Database" title="Set by BALISE_DSN. Never shows a password.">
+          <span className="settings-mono settings-def-value">
+            {sources.db_host} / {sources.db_name}
+          </span>
+        </DefRow>
       </dl>
       <p className="settings-empty-note">
         Attachment storage and commit-author mapping are not configured in this build.
@@ -424,39 +462,23 @@ function StorageTab({ settings }: { settings: SettingsResponse }) {
 function ModelsTab({ settings }: { settings: SettingsResponse }) {
   const { models } = settings;
   return (
-    <section className="settings-card" aria-labelledby="settings-models-heading">
-      <div className="settings-card-head">
-        <h2 id="settings-models-heading">Models</h2>
-      </div>
+    <section className="settings-card panel" aria-labelledby="settings-models-heading">
+      <CardHead id="settings-models-heading" title="Models" />
       <p className="settings-card-desc">
         Which gateway an agent uses to extract claims from a proposal. Read-only: set by
         environment variables when balise serve starts.
       </p>
-      <dl className="settings-field-grid">
-        <div className="settings-field-row">
-          <dt>Claude gateway</dt>
-          <dd>
-            <input
-              className="settings-field-value"
-              value={models.gateway_url_set ? models.gateway_url : "Not set"}
-              disabled
-              readOnly
-              title="Set by ANTHROPIC_BASE_URL."
-            />
-          </dd>
-        </div>
-        <div className="settings-field-row">
-          <dt>API key</dt>
-          <dd>
-            <input
-              className="settings-field-value"
-              value={models.api_key_set ? "Set" : "Not set"}
-              disabled
-              readOnly
-              title="Set by ANTHROPIC_API_KEY. Never shown here."
-            />
-          </dd>
-        </div>
+      <dl className="settings-def-list">
+        <DefRow label="Claude gateway" title="Set by ANTHROPIC_BASE_URL.">
+          {models.gateway_url_set ? (
+            <span className="settings-mono settings-def-value">{models.gateway_url}</span>
+          ) : (
+            <Unset />
+          )}
+        </DefRow>
+        <DefRow label="API key" title="Set by ANTHROPIC_API_KEY. Never shown here.">
+          {models.api_key_set ? "Set" : <Unset />}
+        </DefRow>
       </dl>
       <p className="settings-empty-note">{models.note}</p>
     </section>
@@ -465,20 +487,24 @@ function ModelsTab({ settings }: { settings: SettingsResponse }) {
 
 function ExportTab({ settings }: { settings: SettingsResponse }) {
   return (
-    <section className="settings-card" aria-labelledby="settings-export-heading">
-      <div className="settings-card-head">
-        <h2 id="settings-export-heading">Export a scope</h2>
-      </div>
+    <section className="settings-card panel" aria-labelledby="settings-export-heading">
+      <CardHead id="settings-export-heading" title="Export a scope" />
       <p className="settings-card-desc settings-export-note">
         Export does not exist yet in this build. There is no redaction engine, so a preview
         here would not really redact anything.
       </p>
       <div className="settings-export-grid">
-        <label className="settings-field-row">
-          <span>Scope</span>
-          <select disabled title={EXPORT_TITLE} defaultValue="">
+        <div className="settings-form-field">
+          <label htmlFor="settings-export-scope">Scope</label>
+          <select
+            id="settings-export-scope"
+            className="field"
+            disabled
+            title={EXPORT_TITLE}
+            defaultValue=""
+          >
             <option value="" disabled>
-              Choose a scope
+              Choose a scope…
             </option>
             {settings.scopes.map((s) => (
               <option key={s.name} value={s.name}>
@@ -486,22 +512,28 @@ function ExportTab({ settings }: { settings: SettingsResponse }) {
               </option>
             ))}
           </select>
-        </label>
-        <label className="settings-field-row">
-          <span>Audience</span>
-          <select disabled title={EXPORT_TITLE} defaultValue="">
+        </div>
+        <div className="settings-form-field">
+          <label htmlFor="settings-export-audience">Audience</label>
+          <select
+            id="settings-export-audience"
+            className="field"
+            disabled
+            title={EXPORT_TITLE}
+            defaultValue=""
+          >
             <option value="" disabled>
-              Choose an audience
+              Choose an audience…
             </option>
           </select>
-        </label>
+        </div>
       </div>
-      <div className="settings-export-actions">
-        <button type="button" disabled title={EXPORT_TITLE}>
-          Preview redaction
-        </button>
-        <button type="button" disabled title={EXPORT_TITLE}>
+      <div className="settings-form-actions">
+        <button type="button" className="btn btn-primary" disabled title={EXPORT_TITLE}>
           Export
+        </button>
+        <button type="button" className="btn btn-secondary" disabled title={EXPORT_TITLE}>
+          Preview redaction
         </button>
       </div>
     </section>

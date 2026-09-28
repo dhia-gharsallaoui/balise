@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { ArrowsOut, Minus, Plus } from "@phosphor-icons/react";
 import type { ElementDefinition } from "cytoscape";
 import type { PageRef } from "../../lib/types";
 import type { EgoGraph } from "./ego";
@@ -55,18 +56,20 @@ export function GraphCanvas({
         role="img"
         aria-label={`Relation graph of ${nodeCount} pages`}
       />
-      <div className="graph-zoom-controls">
-        <button type="button" aria-label="Zoom in" onClick={zoomIn}>
-          +
+      <div className="graph-zoom-controls" role="group" aria-label="Graph zoom">
+        <button type="button" aria-label="Zoom in" title="Zoom in" onClick={zoomIn}>
+          <Plus size={14} aria-hidden="true" />
         </button>
-        <button type="button" aria-label="Zoom out" onClick={zoomOut}>
-          −
+        <button type="button" aria-label="Zoom out" title="Zoom out" onClick={zoomOut}>
+          <Minus size={14} aria-hidden="true" />
         </button>
-        <button type="button" aria-label="Fit graph to view" onClick={fitToContent}>
-          ⤢
+        <button type="button" aria-label="Fit graph to view" title="Fit graph to view" onClick={fitToContent}>
+          <ArrowsOut size={14} aria-hidden="true" />
         </button>
       </div>
-      <p className="graph-hint-scroll">Scroll normally; hold Ctrl (or ⌘) and scroll, or pinch, to zoom the graph.</p>
+      <p className="graph-hint-scroll">
+        Hold Ctrl (or ⌘) and scroll, or pinch, to zoom. Click a node to open it.
+      </p>
       <GraphA11yList
         mode={mode}
         ego={ego}

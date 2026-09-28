@@ -1,228 +1,318 @@
-/* web/src/styles/home.css — the Home screen, rebuilt to match the card-grid design in
-   /tmp/balise-design/knowledge-v3.html (lines 74-121), which supersedes 02-ui-design-v1.md
-   section 5.1's plain-sentence "briefing" (see docs/superpowers/specs/2026-09-16-balise-
-   vertical-slice-design.md section 9). Values below are transcribed from that markup, literals
-   replaced with tokens — the same convention shell.css and review.css already document. */
+/* web/src/styles/home.css: the Home screen.
+
+   One hero moment (the greeting), then an asymmetric two-column grid: the short, actionable
+   lists stack on the left, the longer "Changed recently" timeline runs down the right. No
+   cards: each section is a heading over a hairline, rows are separated by soft rules, so a
+   group never carries both a box and per-row borders. */
 
 .home-page {
-  padding: 28px 28px 56px;
+  padding: 36px 32px 64px;
   max-width: 1240px;
+  animation: rise var(--duration) var(--ease-out) both;
+}
+
+/* ---- Hero ---- */
+
+.home-hero {
+  margin-bottom: 40px;
 }
 
 .home-greeting {
-  margin: 0 0 4px;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 34px;
-  letter-spacing: -0.01em;
-  line-height: 1.15;
+  margin: 0;
+  font-size: 38px;
+  font-weight: 620;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
   color: var(--ink);
 }
 
 .home-summary {
-  margin: 0 0 26px;
-  color: var(--ink-2);
+  margin: 12px 0 0;
+  max-width: 65ch;
   font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-2);
 }
 
-.home-cards {
+/* ---- Layout ---- */
+
+.home-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 18px;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 48px;
   align-items: start;
 }
 
-.home-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
-  animation: rise var(--duration) ease both;
-}
-
-.home-cards > .home-card:nth-child(2) { animation-delay: calc(var(--duration) / 6); }
-.home-cards > .home-card:nth-child(3) { animation-delay: calc(var(--duration) / 3); }
-
-.home-card-head {
+.home-col {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--line-soft);
+  flex-direction: column;
+  gap: 40px;
+  min-width: 0;
 }
 
-.home-card-head h2 {
+.home-section {
+  min-width: 0;
+}
+
+.home-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.home-section-head h2 {
   margin: 0;
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 600;
+  letter-spacing: -0.015em;
   color: var(--ink);
 }
 
-.home-card-count {
+.home-head-action {
+  margin-left: auto;
+  margin-right: -8px;
+}
+
+.home-head-meta {
+  margin-left: auto;
   font-size: 12.5px;
   color: var(--ink-3);
 }
 
-.home-open-review {
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--accent-ink);
-  font-weight: 500;
+.home-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.home-open-review:hover,
-.home-open-review:focus-visible {
-  text-decoration: underline;
+.home-list > li + li {
+  border-top: 1px solid var(--line-soft);
 }
 
 .home-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
-  padding: 14px 18px;
-  font-size: 14px;
+  padding: 16px 0;
+  font-size: 13.5px;
   color: var(--ink-3);
 }
 
-/* ---- Waiting for you: 34px numeral | label | source ---- */
+.home-empty svg {
+  flex: none;
+}
+
+.home-section-foot {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+/* ---- Waiting for you: numeral | label | scope ---- */
 
 .home-row-waiting {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: baseline;
-  width: 100%;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--line-soft);
+  /* Bleeds 8px past the column on both sides so the hover fill has room while the numerals
+     stay aligned with the heading above. */
+  width: calc(100% + 16px);
+  min-height: 44px;
+  padding: 11px 8px;
+  margin-inline: -8px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
   color: var(--ink-body);
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-out);
 }
 
-.home-row-waiting:hover,
-.home-row-waiting:focus-visible {
+.home-row-waiting:hover {
   background: var(--surface-2);
 }
 
-/* .home-row-waiting no longer shares the .home-row class (that collided at equal specificity
-   and clobbered grid-template-columns down to .home-row's 8px/1fr — see home-v3-report.md's
-   fix-round section), so it needs its own :last-child border removal. */
-.home-row-waiting:last-child {
-  border-bottom: none;
-}
-
 .home-row-numeral {
-  font-family: var(--font-display);
-  font-size: 22px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: 1;
-  font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 
+.home-row-label {
+  min-width: 0;
+}
+
 .home-row-source {
+  font-family: var(--font-mono);
   font-size: 12.5px;
   color: var(--ink-3);
   white-space: nowrap;
 }
 
-.home-card-foot {
-  padding: 12px 18px;
-  font-size: 12.5px;
-  color: var(--ink-3);
-}
-
-/* ---- Needs attention / Changed recently: 8px dot | content ---- */
-
-.home-row {
-  display: grid;
-  grid-template-columns: 8px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.home-row:last-child {
-  border-bottom: none;
-}
+/* ---- Needs attention: a warn mark | sentence + note ---- */
 
 .home-row-attention {
-  padding: 12px 18px;
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px 0;
   font-size: 14px;
 }
 
-.home-row-change {
-  width: 100%;
-  padding: 11px 18px;
-  font-size: 14px;
+.home-mark-warn {
+  width: 7px;
+  height: 7px;
+  margin-top: 7px;
+  border-radius: 2px;
+  background: var(--amber-dot);
 }
-
-button.home-row-change:hover,
-button.home-row-change:focus-visible {
-  background: var(--surface-2);
-}
-
-/* Rendered as a plain div, never a button, when the change has no resolvable page (see
-   Home.tsx's ChangeRow) — no hover affordance to imply it does something on click. */
-.home-row-static {
-  cursor: default;
-}
-
-.home-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-top: 5px;
-}
-
-.home-dot-warn { background: var(--amber-dot); }
-.home-dot-you { background: var(--accent); }
-.home-dot-agent { background: var(--type-procedure); }
-.home-dot-connector { background: var(--ink-3); }
 
 .home-row-body {
   min-width: 0;
 }
 
 .home-row-note {
+  margin-top: 2px;
   font-size: 12.5px;
   color: var(--ink-3);
-  margin-top: 1px;
 }
 
-.home-row-title {
-  font-size: 14px;
-  color: var(--ink-body);
-}
-
-/* A "link" here is a sentence, not a button-shaped control — underline on hover/focus is the
-   only affordance. A real <button> rather than an <a> because it filters Knowledge in place
-   instead of navigating to a URL; see Home.tsx's comment by the attention row. */
+/* The sentence filters Knowledge in place rather than navigating, so it is a <button>; an
+   underline on hover is its only affordance. */
 .home-link {
   display: inline;
   padding: 0;
-  color: var(--accent-ink);
-  text-align: left;
+  color: var(--ink);
   font-size: inherit;
-  line-height: inherit;
-}
-
-.home-link:hover,
-.home-link:focus-visible {
+  line-height: 1.45;
+  text-align: left;
   text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--duration-fast) var(--ease-out);
 }
 
-@media (max-width: 480px) {
+.home-link:hover {
+  text-decoration-color: currentColor;
+}
+
+/* ---- Changed recently: a timeline ---- */
+
+.home-timeline {
+  position: relative;
+  margin: 0;
+  padding: 8px 0 0;
+  list-style: none;
+}
+
+/* The spine: one hairline the ticks hang off, instead of a border on every row. */
+.home-timeline::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 12px;
+  left: 4px;
+  width: 1px;
+  background: var(--line);
+}
+
+.home-entry {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  /* Sits clear of the spine so the hover fill never covers it. */
+  width: calc(100% - 14px);
+  margin-left: 14px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+
+.home-entry-link {
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.home-entry-link:hover {
+  background: var(--surface-2);
+}
+
+.home-entry-static {
+  cursor: default;
+}
+
+.home-tick {
+  position: absolute;
+  left: -13px;
+  top: 17px;
+  width: 7px;
+  height: 1.5px;
+  background: var(--ink-3);
+}
+
+.home-tick-you {
+  background: var(--ink);
+}
+
+.home-entry-title {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-body);
+  overflow-wrap: anywhere;
+}
+
+.home-entry-link .home-entry-title {
+  color: var(--ink);
+}
+
+.home-entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
+  row-gap: 2px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.home-entry-scope {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.home-entry-updates {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+/* ---- Narrow ---- */
+
+@media (max-width: 900px) {
+  .home-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+  }
+}
+
+@media (max-width: 720px) {
   .home-page {
-    padding: 20px 16px 40px;
+    padding: 24px 16px 48px;
+  }
+
+  .home-hero {
+    margin-bottom: 32px;
   }
 
   .home-greeting {
-    font-size: 28px;
-  }
-
-  /* minmax(300px, 1fr) (the v3 source value, kept above for wider viewports) can't shrink
-     below 300px — combined with the rail's own 56px collapsed width (shell.css, <600px) and
-     this page's own side padding, that overflowed the viewport at 320px. Below 480px the
-     grid is already a single column in practice, so let the one remaining track size to
-     the container instead of enforcing a floor wider than some phones. */
-  .home-cards {
-    grid-template-columns: 1fr;
+    font-size: 30px;
   }
 }

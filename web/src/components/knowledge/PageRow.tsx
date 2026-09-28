@@ -1,7 +1,9 @@
+import { CaretRight } from "@phosphor-icons/react";
 import { useState } from "react";
+import { plural } from "../../lib/plural";
 import type { PageRef, PageRow as Row } from "../../lib/types";
 import { RichTitle } from "../ui/RichTitle";
-import { StatusWord } from "../ui/StatusWord";
+import { isNotable, StatusWord } from "../ui/StatusWord";
 import { TypeChip } from "../ui/TypeChip";
 
 // The row that appears everywhere (spec `01` §0: "design the row once"). The
@@ -9,13 +11,15 @@ import { TypeChip } from "../ui/TypeChip";
 // These must stay two separate click targets — see pagerow.test.tsx's
 // "does not open the page when only the twist is activated".
 //
+// data-type drives the row's 3px leading edge in its type colour (knowledge.css): the hue is a
+// mark beside the row, never the colour of its text.
+//
 // showType (default false, unchanged for every existing caller) prints the page's type as
 // a TypeChip in the subtitle line. It exists for ResultList's search-result mode: FIX 1
 // (search-ranking-coverage-report.md) stops bucketing search hits into per-type sections so
 // the API's relevance order survives to the screen, which means the type can no longer be
 // read off a group header — this is where that signal moves to instead. Browse mode keeps
-// its type-grouped headers untouched and never passes this prop, so its rows render exactly
-// as before.
+// its type-grouped headers and never passes this prop.
 export function PageRow({
   page,
   onOpen,
@@ -33,7 +37,11 @@ export function PageRow({
   const hasClaims = visibleClaims.length > 0;
 
   return (
-    <li className="page-row" data-historical={page.historical ? "true" : "false"}>
+    <li
+      className="page-row"
+      data-type={page.type}
+      data-historical={page.historical ? "true" : "false"}
+    >
       <div className="page-row-head">
         <button
           type="button"
@@ -43,7 +51,7 @@ export function PageRow({
           disabled={!hasClaims}
           onClick={() => setOpen((v) => !v)}
         >
-          {hasClaims ? (open ? "▾" : "▸") : ""}
+          {hasClaims ? <CaretRight size={14} weight="bold" aria-hidden="true" /> : null}
         </button>
 
         <button
@@ -53,20 +61,15 @@ export function PageRow({
         >
           <span className="page-title"><RichTitle title={page.title} /></span>
           <span className="page-sub">
-            {showType ? (
-              <>
-                <TypeChip type={page.type} />
-                {" · "}
-              </>
+            {showType ? <TypeChip type={page.type} /> : null}
+            <span className="page-slug">{page.slug}</span>
+            {page.claims_count > 0 ? (
+              <span className="page-claims">{plural(page.claims_count, "claim")}</span>
             ) : null}
-            {page.slug}
-            {page.claims_count > 0
-              ? ` · ${page.claims_count} claim${page.claims_count === 1 ? "" : "s"}`
-              : ""}
           </span>
         </button>
 
-        <StatusWord status={page.status} />
+        {isNotable(page.status) ? <StatusWord status={page.status} /> : null}
       </div>
 
       {open && hasClaims ? (
@@ -78,7 +81,7 @@ export function PageRow({
               data-historical={claim.status !== "active" ? "true" : "false"}
             >
               <span className="claim-text">{claim.text}</span>
-              <StatusWord status={claim.status} asOf={claim.as_of} />
+              {isNotable(claim.status) ? <StatusWord status={claim.status} asOf={claim.as_of} /> : null}
             </li>
           ))}
         </ul>

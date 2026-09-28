@@ -1,37 +1,29 @@
-import { useEffect, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import { plural } from "../../lib/plural";
 import { ApiError, fetchSourcesLog, uploadSourcePage } from "../../lib/api";
 import type { HomeChange, HomePageRef } from "../../lib/types";
+import { Check, UploadSimple, X } from "@phosphor-icons/react";
 import { RichTitle } from "../ui/RichTitle";
 import "../../styles/sources.css";
 
-// The Sources screen (AppShell's subtitle for this section: "Where knowledge comes in"; markup
-// spec at /tmp/balise-design/knowledge-v3.html lines 397-440). Three cards, in the mockup's
-// order:
+// The Sources screen (AppShell's subtitle: "Where knowledge comes in"). One intro line, one
+// panel, one log:
 //
-//   1. Connected sources — there is no connector framework in this build (no connectors table,
-//      no sync jobs), so this is a static, honest empty state rather than the fabricated
-//      dot/name/"feeds N"/action rows v3's markup shows. It says only what is true right now,
-//      and never implies a connector framework is coming in a later release.
-//   2. Drop files here or paste text — the one real feature. A person drops a markdown file or
-//      pastes text, picks a space, and it becomes a page committed to the vault
-//      (POST /api/sources/pages, internal/api/sources.go). v3's original copy promised PDFs,
-//      images and recordings would be "kept as attachments" — there is no blob store in this
-//      build, so that promise is dropped; the copy here says only what the endpoint actually
-//      does. The mockup also has no slug field — only a scope <select> — so a URL-safe slug is
-//      derived client-side from the title (or the dropped file's name) via slugify() below,
-//      matching internal/vault.ValidateSegment's rules (no "/" or "\", never "." or "..", never
-//      empty, no control characters): slugify only ever emits [a-z0-9-], so it can never
-//      produce a value ValidateSegment would reject.
-//   3. Ingest log — real git history (GET /api/sources/log, which is exactly Home's
-//      s.homeChanges reused server-side), not a fabricated feed. Same row shape as Home's
-//      "Changed recently" card, since both are fed by the identical HomeChange rows.
+//   - The intro says plainly that no connectors exist in this build (no connectors table, no
+//     sync jobs), instead of a whole card holding a zero. It never implies one is coming.
+//   - "Add a source" is the one real feature: drop or choose a markdown/text file, or paste
+//     text, pick a space, and it becomes a page committed to the vault (POST
+//     /api/sources/pages, internal/api/sources.go). The whole panel is the drop target; the
+//     native file input stays in the DOM (labelled, visually hidden) and a real button opens
+//     it, so the browser's "Choose File / No file chosen" chrome never shows. There is no slug
+//     field, so a URL-safe slug is derived client-side from the title (or file name) via
+//     slugify() below, which can never emit a value internal/vault.ValidateSegment rejects.
+//   - The ingest log is real git history (GET /api/sources/log, Home's s.homeChanges reused
+//     server-side), not a fabricated feed.
 //
 // Copy rule (02 section 8): never say "uid", "index", "token" or "budget" on screen; say
-// "page", "space" and "source" instead. Helper functions below (relativeTime, plural,
-// dotClassForAuthor) are reimplemented locally rather than imported from Home.tsx — this
-// codebase's established convention (see AgentsScreen's identical note) is a small local copy
-// per screen, not a shared utility module for a handful of one-line formatters.
+// "page", "space" and "source" instead. relativeTime is a small local copy per screen, this
+// codebase's convention (see AgentsScreen's identical note) for one-line formatters.
 
 const MAX_BYTES = 2 * 1024 * 1024; // mirrors internal/api/sources.go's sourcesMaxBodyBytes
 const ACCEPTED_EXTENSIONS = [".md", ".markdown", ".txt"];
@@ -57,6 +49,7 @@ export function SourcesScreen({ allScopes = [], onOpenPage }: SourcesScreenProps
   const [log, setLog] = useState<HomeChange[] | null>(null);
   const [logError, setLogError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Keeps the space <select> pointed at a real space even if allScopes arrives after first
   // render — AppShell derives it from the page tree, which loads asynchronously.
@@ -158,66 +151,94 @@ export function SourcesScreen({ allScopes = [], onOpenPage }: SourcesScreenProps
     onOpenPage?.(pages, label);
   }
 
+  function clearFile() {
+    setContent("");
+    setFileName(null);
+    setFeedback({ kind: "idle" });
+  }
+
   return (
     <div className="sources-page">
-      <section className="sources-card" aria-labelledby="sources-connected-heading">
-        <div className="sources-card-head">
-          <h2 id="sources-connected-heading">Connected sources</h2>
-          <span className="sources-card-count">0</span>
-        </div>
-        <p className="sources-empty">
-          No sources are connected. Add a page below by dropping a file or pasting text.
-        </p>
-      </section>
+      <p className="sources-intro">
+        No sources are connected, so pages arrive by dropping a file or pasting text below. Each
+        one becomes a page in the space you choose.
+      </p>
 
       <section
-        className={`sources-card sources-drop${isDragOver ? " is-dragover" : ""}`}
-        aria-labelledby="sources-drop-heading"
+        className={`panel sources-add${isDragOver ? " is-dragover" : ""}`}
+        aria-labelledby="sources-add-heading"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <div className="sources-drop-head">
-          <h2 id="sources-drop-heading">Drop files here or paste text</h2>
-          <p className="sources-drop-copy">
-            Add a source directly: drop a markdown file or paste text below, and it becomes a
-            page in the space you choose.
-          </p>
-        </div>
+        <h2 id="sources-add-heading" className="sources-heading">
+          Add a source
+        </h2>
 
-        <form className="sources-drop-form" onSubmit={handleSubmit}>
-          <label className="sources-field" htmlFor="sources-file-input">
-            <span>Choose a file</span>
+        <form className="sources-form" onSubmit={handleSubmit}>
+          <div className="sources-dropzone">
+            <UploadSimple size={18} weight="regular" aria-hidden="true" className="sources-dropzone-icon" />
+            {fileName ? (
+              <div className="sources-file">
+                <span className="sources-file-name">{fileName}</span>
+                <button
+                  type="button"
+                  className="btn btn-quiet btn-sm"
+                  onClick={clearFile}
+                  aria-label={`Remove ${fileName}`}
+                >
+                  <X size={14} aria-hidden="true" />
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <p className="sources-dropzone-copy">
+                Drop a .md or .txt file, or{" "}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  choose one
+                </button>
+                <span className="sources-dropzone-limit">Up to 2 MB</span>
+              </p>
+            )}
+            <label className="sr-only" htmlFor="sources-file-input">
+              Choose a file
+            </label>
             <input
+              ref={fileInputRef}
               id="sources-file-input"
+              className="sr-only"
               type="file"
+              tabIndex={-1}
               accept=".md,.markdown,.txt,text/markdown,text/plain"
               onChange={handleFileChange}
             />
-          </label>
-          <p className="sources-drop-hint">
-            {fileName ? `Loaded "${fileName}".` : "or drag a .md, .markdown or .txt file onto this card"}
-          </p>
+          </div>
 
           <label className="sources-field" htmlFor="sources-paste">
-            <span>Or paste text</span>
+            <span className="sources-label">Or paste text</span>
             <textarea
               id="sources-paste"
+              className="field sources-paste"
               value={content}
               onChange={(e) => {
                 setContent(e.target.value);
                 setFileName(null);
               }}
-              placeholder="Paste markdown or plain text here…"
-              rows={6}
+              placeholder="Paste markdown or plain text…"
+              rows={7}
             />
           </label>
 
-          <div className="sources-drop-row">
-            <label className="sources-field sources-field-inline" htmlFor="sources-scope">
-              <span>Into</span>
+          <div className="sources-row-fields">
+            <label className="sources-field" htmlFor="sources-scope">
+              <span className="sources-label">Into</span>
               <select
                 id="sources-scope"
+                className="field"
                 value={scope}
                 onChange={(e) => setScope(e.target.value)}
                 disabled={allScopes.length === 0}
@@ -231,115 +252,188 @@ export function SourcesScreen({ allScopes = [], onOpenPage }: SourcesScreenProps
               </select>
             </label>
 
-            <label className="sources-field sources-field-inline" htmlFor="sources-title">
-              <span>Title</span>
+            <label className="sources-field" htmlFor="sources-title">
+              <span className="sources-label">Title</span>
               <input
                 id="sources-title"
+                className="field"
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Taken from the text if left blank"
+                placeholder="Taken from the text if left blank…"
               />
             </label>
 
-            <button type="submit" className="sources-submit" disabled={submitting || !scope}>
+            <button type="submit" className="btn btn-primary sources-submit" disabled={submitting || !scope}>
               {submitting ? "Adding…" : "Add to vault"}
             </button>
           </div>
 
-          {feedback.kind === "error" ? (
-            <p className="sources-feedback sources-feedback-error" role="alert">
-              {feedback.message}
-            </p>
-          ) : feedback.kind === "success" ? (
-            <p className="sources-feedback sources-feedback-success" role="status">
-              Added &quot;{feedback.title}&quot; to {feedback.scope}.
-              {onOpenPage ? (
-                <>
-                  {" "}
-                  <button
-                    type="button"
-                    className="sources-feedback-open"
-                    onClick={() =>
-                      openIngestedPage(
-                        [{ scope: feedback.scope, slug: feedback.slug, title: feedback.title }],
-                        `Added: ${feedback.title}`,
-                      )
-                    }
-                  >
-                    Open it
-                  </button>
-                </>
-              ) : null}
-            </p>
-          ) : null}
+          <UploadFeedback feedback={feedback} onOpenPage={onOpenPage ? openIngestedPage : undefined} />
         </form>
       </section>
 
-      <section className="sources-card" aria-labelledby="sources-log-heading">
-        <div className="sources-card-head">
-          <h2 id="sources-log-heading">Ingest log</h2>
-          <span className="sources-card-count">{log ? plural(log.length, "entry") : ""}</span>
-        </div>
-
-        {logError ? (
-          <p className="sources-empty">Could not load the ingest log: {logError}</p>
-        ) : log === null ? null : log.length === 0 ? (
-          <p className="sources-empty">Nothing has been added yet.</p>
-        ) : (
-          log.map((change) => <IngestRow key={change.sha} change={change} onOpenPage={openIngestedPage} />)
-        )}
-      </section>
+      <IngestLog log={log} error={logError} onOpenPage={openIngestedPage} />
     </div>
+  );
+}
+
+function UploadFeedback({
+  feedback,
+  onOpenPage,
+}: {
+  feedback: Feedback;
+  onOpenPage?: (pages: HomePageRef[], label: string) => void;
+}) {
+  if (feedback.kind === "error") {
+    return (
+      <p className="sources-feedback sources-feedback-error" role="alert">
+        {feedback.message}
+      </p>
+    );
+  }
+  if (feedback.kind !== "success") return null;
+  const { scope, slug, title } = feedback;
+  return (
+    <p className="sources-feedback sources-feedback-success" role="status">
+      <Check size={14} weight="bold" aria-hidden="true" className="sources-feedback-icon" />
+      <span>
+        Added &quot;{title}&quot; to <span className="sources-mono">{scope}</span>.
+      </span>
+      {onOpenPage ? (
+        <button
+          type="button"
+          className="btn btn-quiet btn-sm"
+          onClick={() => onOpenPage([{ scope, slug, title }], `Added: ${title}`)}
+        >
+          Open it
+        </button>
+      ) : null}
+    </p>
+  );
+}
+
+// ---- Ingest log ----
+//
+// A compact log rather than a card list: time on the left, message, author on the right,
+// hairline rules between rows only. Consecutive commits with the same message and author
+// (a memory import that ran several times, the same page re-added) collapse into one row
+// with a count, so a burst of identical entries does not push everything else off screen.
+
+const LOG_PREVIEW_ROWS = 8;
+
+interface LogGroup {
+  head: HomeChange;
+  count: number;
+}
+
+function groupConsecutive(log: HomeChange[]): LogGroup[] {
+  return log.reduce<LogGroup[]>((groups, change) => {
+    const last = groups[groups.length - 1];
+    if (last && sameEntry(last.head, change)) {
+      return [...groups.slice(0, -1), { head: last.head, count: last.count + 1 }];
+    }
+    return [...groups, { head: change, count: 1 }];
+  }, []);
+}
+
+function sameEntry(a: HomeChange, b: HomeChange): boolean {
+  return (
+    (a.title ?? a.message) === (b.title ?? b.message) &&
+    a.author_word === b.author_word &&
+    a.scope === b.scope &&
+    a.slug === b.slug
+  );
+}
+
+interface IngestLogProps {
+  log: HomeChange[] | null;
+  error: string | null;
+  onOpenPage: (pages: HomePageRef[], label: string) => void;
+}
+
+function IngestLog({ log, error, onOpenPage }: IngestLogProps) {
+  const [showAll, setShowAll] = useState(false);
+  const groups = log ? groupConsecutive(log) : [];
+  const visible = showAll ? groups : groups.slice(0, LOG_PREVIEW_ROWS);
+  const hidden = groups.length - visible.length;
+
+  return (
+    <section className="sources-log" aria-labelledby="sources-log-heading">
+      <div className="sources-log-head">
+        <h2 id="sources-log-heading" className="sources-heading">
+          Ingest log
+        </h2>
+        <span className="sources-meta">{log ? plural(log.length, "entry") : ""}</span>
+      </div>
+
+      {error ? (
+        <p className="sources-empty">Could not load the ingest log: {error}</p>
+      ) : log === null ? null : log.length === 0 ? (
+        <p className="sources-empty">Nothing has been added yet.</p>
+      ) : (
+        <ul className="sources-log-list">
+          {visible.map((group) => (
+            <li key={group.head.sha}>
+              <IngestRow change={group.head} count={group.count} onOpenPage={onOpenPage} />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {hidden > 0 ? (
+        <button type="button" className="btn btn-quiet btn-sm sources-show-all" onClick={() => setShowAll(true)}>
+          Show {hidden} more
+        </button>
+      ) : null}
+    </section>
   );
 }
 
 interface IngestRowProps {
   change: HomeChange;
+  count: number;
   onOpenPage: (pages: HomePageRef[], label: string) => void;
 }
 
-// Mirrors Home.tsx's ChangeRow exactly: a change is only clickable when the backend resolved
-// it to a real indexed document (scope, slug and title arrive together, or not at all — see
+// Same rule as Home.tsx's ChangeRow: a change is only clickable when the backend resolved it
+// to a real indexed document (scope, slug and title arrive together, or not at all, see
 // HomeChange's comment in lib/types.ts). Everything else renders as plain, inert text.
-function IngestRow({ change, onOpenPage }: IngestRowProps) {
-  const title = change.title ?? change.message;
-  const who = `${change.author_word}, ${relativeTime(change.when)}`;
-  const dotClass = dotClassForAuthor(change.author_word);
+function IngestRow({ change, count, onOpenPage }: IngestRowProps) {
+  const body = (
+    <>
+      <time className="sources-log-time" dateTime={change.when}>
+        {relativeTime(change.when)}
+      </time>
+      <span className="sources-log-msg">
+        <span className="sources-log-title">
+          <RichTitle title={change.title ?? change.message} />
+        </span>
+        {count > 1 ? (
+          <span className="count">
+            {count}
+            <span className="sr-only"> times</span>
+          </span>
+        ) : null}
+      </span>
+      <span className="sources-log-who">{change.author_word}</span>
+    </>
+  );
 
   if (change.scope && change.slug && change.title) {
-    const scope = change.scope;
-    const slug = change.slug;
-    const pageTitle = change.title;
+    const ref = { scope: change.scope, slug: change.slug, title: change.title };
     return (
       <button
         type="button"
-        className="sources-row sources-row-clickable"
-        onClick={() => onOpenPage([{ scope, slug, title: pageTitle }], `Added: ${pageTitle}`)}
-        aria-label={`Open ${pageTitle}`}
+        className="sources-log-row is-link"
+        onClick={() => onOpenPage([ref], `Added: ${ref.title}`)}
+        aria-label={`Open ${ref.title}`}
       >
-        <span className={`sources-dot ${dotClass}`} aria-hidden="true" />
-        <div className="sources-row-body">
-          <div className="sources-row-title">
-            <RichTitle title={title} />
-          </div>
-          <div className="sources-row-note">{who}</div>
-        </div>
+        {body}
       </button>
     );
   }
-
-  return (
-    <div className="sources-row sources-row-static">
-      <span className={`sources-dot ${dotClass}`} aria-hidden="true" />
-      <div className="sources-row-body">
-        <div className="sources-row-title">
-          <RichTitle title={title} />
-        </div>
-        <div className="sources-row-note">{who}</div>
-      </div>
-    </div>
-  );
+  return <div className="sources-log-row">{body}</div>;
 }
 
 // ---- Slug derivation ----
@@ -397,10 +491,4 @@ function relativeTime(iso: string): string {
   const days = Math.round(hours / DAY_HOURS);
   if (days < MONTH_DAYS) return plural(days, "day") + " ago";
   return new Date(iso).toLocaleDateString();
-}
-
-function dotClassForAuthor(word: string): string {
-  if (word === "you") return "sources-dot-you";
-  if (word === "an agent") return "sources-dot-agent";
-  return "sources-dot-connector";
 }

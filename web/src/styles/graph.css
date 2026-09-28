@@ -1,9 +1,9 @@
 /* web/src/styles/graph.css — the Knowledge screen's graph view (spec §6.7 F-61).
    Both the ego graph (centred on the open page) and the whole-vault global graph (no page
    open) now render through Cytoscape (see GraphCanvas.tsx / useCytoscapeGraph.ts /
-   graphElements.ts / graphStyle.ts) instead of a hand-rolled SVG force simulation and a
-   bespoke radial-tree layout — the chrome around the canvas (controls, legend, depth
-   toggle) is unchanged from before that rewrite. */
+   graphElements.ts / graphStyle.ts). The chrome around the canvas is quiet on
+   purpose: 12px ink-3 meta, a legend whose swatches carry the only hue, and a small button
+   stack pinned inside the canvas. */
 
 .graph-frame {
   background: var(--surface);
@@ -13,55 +13,60 @@
   overflow: hidden;
 }
 
+/* Ego mode's first row: the depth toggle (.segmented from controls.css) and how many direct
+   neighbours depth 1 covers. */
 .graph-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--line-soft);
 }
 
-.graph-depth {
-  display: inline-flex;
-  gap: 4px;
-}
-
-.graph-depth button {
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
-  color: var(--ink-2);
-  border-radius: var(--radius-sm);
-  padding: 3px 10px;
+.graph-depth > button {
+  min-height: 26px;
   font-size: 12.5px;
-  cursor: pointer;
-  transition: background var(--duration) ease, color var(--duration) ease;
-}
-
-.graph-depth button[aria-pressed="true"] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-}
-
-.graph-depth button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 
 .graph-neighbour-count {
   color: var(--ink-3);
-  font-size: 12.5px;
+  font-size: 12px;
+}
+
+/* The meta strip: counts on the left, the legend on the right, wrapping to two lines on a
+   narrow frame. Counts are separate spans spaced by gap, not a run of middle dots. */
+.graph-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.global-summary,
+.graph-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 0;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
 }
 
 .graph-legend {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--surface-2);
-  font-size: 12.5px;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
   color: var(--ink-2);
 }
 
@@ -72,10 +77,28 @@
   text-transform: capitalize;
 }
 
+.type-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--type-note);
+}
+
+.type-dot[data-type="state"] { background: var(--type-state); }
+.type-dot[data-type="decision"] { background: var(--type-decision); }
+.type-dot[data-type="gotcha"] { background: var(--type-gotcha); }
+.type-dot[data-type="procedure"] { background: var(--type-procedure); }
+.type-dot[data-type="issue"] { background: var(--type-issue); }
+.type-dot[data-type="incident"] { background: var(--type-incident); }
+.type-dot[data-type="note"] { background: var(--type-note); }
+.type-dot[data-type="memory"] { background: var(--type-memory); }
+
 .edge-dot {
-  width: 16px;
+  flex: none;
+  width: 14px;
   height: 0;
-  border-top: 2px solid var(--role-about);
+  border-top: 1.5px solid var(--role-about);
 }
 
 .edge-dot[data-role="link"] { border-top-style: dashed; border-top-color: var(--role-link); }
@@ -84,23 +107,6 @@
 .edge-dot[data-role="supersedes"] { border-top-color: var(--role-supersedes); }
 .edge-dot[data-role="derives"] { border-top-color: var(--role-derives); }
 .edge-dot[data-role="owns"] { border-top-color: var(--role-owns); }
-
-.graph-hint {
-  margin-left: auto;
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Global-view summary line, above the canvas — same treatment the old per-panel headers
-   used (border-bottom, ink-3, small caps-less label), just one line for the whole vault
-   now that scopes are compound nodes on one canvas rather than separate panels. */
-.global-summary {
-  margin: 0;
-  padding: 6px 16px;
-  color: var(--ink-3);
-  font-size: 12.5px;
-  border-bottom: 1px solid var(--line-soft);
-}
 
 /* --- Cytoscape stage ------------------------------------------------------------------ */
 
@@ -124,50 +130,53 @@
   }
 }
 
+/* One compact vertical stack, pinned inside the canvas's top-right corner. The fit pass in
+   useCytoscapeGraph reserves a matching right-hand gutter, so it never sits on content. */
 .graph-zoom-controls {
   position: absolute;
+  top: 12px;
   right: 12px;
-  bottom: 12px;
+  z-index: 4;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  z-index: 4;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .graph-zoom-controls button {
-  width: 30px;
-  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: var(--shadow-card);
-  transition: background var(--duration) ease, border-color var(--duration) ease;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-xs);
+  color: var(--ink-2);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
 }
 
 .graph-zoom-controls button:hover {
-  border-color: var(--accent);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
-.graph-zoom-controls button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.graph-zoom-controls button:active {
+  transform: translateY(1px);
 }
 
-/* A visible reminder of the modifier-gated wheel-zoom, sitting under the canvas rather than
-   overlapping it. Screen-reader users get the same information from the a11y list's own
-   buttons instead (real focusable elements, no pointer gesture required at all). */
+/* The modifier-gated wheel-zoom, spelled out under the canvas rather than over it. Screen-reader
+   users get the same information from the a11y list's own buttons instead. */
 .graph-hint-scroll {
   margin: 0;
-  padding: 6px 16px;
+  padding: 8px 14px;
   color: var(--ink-3);
-  font-size: 11.5px;
+  font-size: 12px;
   border-top: 1px solid var(--line-soft);
 }
 

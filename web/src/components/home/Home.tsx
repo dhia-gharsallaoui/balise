@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { ArrowRight, CheckCircle, ClockCounterClockwise, Tray } from "@phosphor-icons/react";
 import { plural } from "../../lib/plural";
 import type { HomeChange, HomePageRef, HomeProposal, HomeResponse } from "../../lib/types";
 import { EmptyState } from "../ui/EmptyState";
@@ -11,12 +13,11 @@ interface Props {
   onFilterAttention: (pages: HomePageRef[], label: string) => void;
 }
 
-// Home was rebuilt from 02-ui-design-v1.md section 5.1's plain-sentence "briefing" to the
-// card-grid direction in /tmp/balise-design/knowledge-v3.html (lines 74-121) — the supersession
-// recorded in docs/superpowers/specs/2026-09-16-balise-vertical-slice-design.md section 9. The
-// v3 markup keeps digits everywhere except one place: the greeting's summary sentence, which
-// spells its numbers out as words. Every other count on this screen (header badges, row
-// numerals, list sizes) stays a plain digit, matching the source design exactly.
+// Home is the one screen with a hero moment: the greeting. Everything under it is a working
+// surface in two unequal columns. The left stacks the two short, actionable lists (waiting,
+// attention); the right holds the longer "Changed recently" timeline, so the long list no
+// longer sets the height of two mostly empty siblings. The summary sentence spells its numbers
+// out as words; every other count on this screen stays a plain digit.
 export function Home({ home, error, onOpenReview, onFilterAttention }: Props) {
   if (error) {
     return <EmptyState title="Could not reach the server." hint={`${error}. Is balise serve running?`} />;
@@ -24,83 +25,102 @@ export function Home({ home, error, onOpenReview, onFilterAttention }: Props) {
   if (!home) return null;
 
   const scopeGroups = groupByScope(home.waiting.proposals);
+  const changeGroups = groupChanges(home.changes);
 
   return (
     <div className="home-page">
-      <h1 className="home-greeting">{greeting(home.owner)}</h1>
-      <p className="home-summary">{summarySentence(home)}</p>
+      <header className="home-hero">
+        <p className="home-greeting">{greeting(home.owner)}</p>
+        <p className="home-summary">{summarySentence(home, changeGroups.length)}</p>
+      </header>
 
-      <div className="home-cards">
-        <section className="home-card" aria-labelledby="home-waiting-heading">
-          <div className="home-card-head">
-            <h2 id="home-waiting-heading">Waiting for you</h2>
-            <span className="home-card-count">{plural(home.waiting.total, "proposal")}</span>
-            <button type="button" className="home-open-review" onClick={onOpenReview}>
-              Open review <span aria-hidden="true">→</span>
-            </button>
-          </div>
+      <div className="home-grid">
+        <div className="home-col">
+          <section className="home-section" aria-labelledby="home-waiting-heading">
+            <div className="home-section-head">
+              <h2 id="home-waiting-heading">Waiting for you</h2>
+              <CountChip count={home.waiting.total} noun="proposal" />
+              <button type="button" className="btn btn-quiet btn-sm home-head-action" onClick={onOpenReview}>
+                Open review
+                <ArrowRight size={14} weight="regular" aria-hidden="true" />
+              </button>
+            </div>
 
-          {scopeGroups.length === 0 ? (
-            <p className="home-empty">Nothing is waiting for review right now.</p>
-          ) : (
-            <>
-              {scopeGroups.map((group) => (
-                <button
-                  key={group.scope}
-                  type="button"
-                  className="home-row-waiting"
-                  onClick={onOpenReview}
-                  aria-label={`${plural(group.count, waitingRowNoun(group))} waiting in ${group.scope} — open review`}
-                >
-                  <span className="home-row-numeral">{group.count}</span>
-                  <span className="home-row-label">{waitingRowLabel(group)}</span>
-                  <span className="home-row-source">{group.scope}</span>
-                </button>
-              ))}
-              <div className="home-card-foot">Nothing is applied until you accept it.</div>
-            </>
-          )}
-        </section>
+            {scopeGroups.length === 0 ? (
+              <QuietEmpty icon={<Tray size={16} aria-hidden="true" />} text="Nothing is waiting for review right now." />
+            ) : (
+              <>
+                <ul className="home-list">
+                  {scopeGroups.map((group) => (
+                    <li key={group.scope}>
+                      <button
+                        type="button"
+                        className="home-row-waiting"
+                        onClick={onOpenReview}
+                        aria-label={`${plural(group.count, waitingRowNoun(group))} waiting in ${group.scope} — open review`}
+                      >
+                        <span className="home-row-numeral">{group.count}</span>
+                        <span className="home-row-label">{waitingRowLabel(group)}</span>
+                        <span className="home-row-source">{group.scope}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="home-section-foot">Nothing is applied until you accept it.</p>
+              </>
+            )}
+          </section>
 
-        <section className="home-card" aria-labelledby="home-attention-heading">
-          <div className="home-card-head">
-            <h2 id="home-attention-heading">Needs attention</h2>
-            <span className="home-card-count">{plural(home.attention.length, "item")}</span>
-          </div>
+          <section className="home-section" aria-labelledby="home-attention-heading">
+            <div className="home-section-head">
+              <h2 id="home-attention-heading">Needs attention</h2>
+              <CountChip count={home.attention.length} noun="item" />
+            </div>
 
-          {home.attention.length === 0 ? (
-            <p className="home-empty">Nothing needs attention right now.</p>
-          ) : (
-            home.attention.map((item) => (
-              <div key={item.rule} className="home-row home-row-attention">
-                <span className="home-dot home-dot-warn" aria-hidden="true" />
-                <div className="home-row-body">
-                  <button
-                    type="button"
-                    className="home-link"
-                    onClick={() => onFilterAttention(item.pages, item.sentence)}
-                  >
-                    {item.sentence}
-                  </button>
-                  <div className="home-row-note">{attentionNote(item.pages)}</div>
-                </div>
-              </div>
-            ))
-          )}
-        </section>
+            {home.attention.length === 0 ? (
+              <QuietEmpty icon={<CheckCircle size={16} aria-hidden="true" />} text="Nothing needs attention right now." />
+            ) : (
+              <ul className="home-list">
+                {home.attention.map((item) => (
+                  <li key={item.rule} className="home-row-attention">
+                    <span className="home-mark-warn" aria-hidden="true" />
+                    <div className="home-row-body">
+                      <button
+                        type="button"
+                        className="home-link"
+                        onClick={() => onFilterAttention(item.pages, item.sentence)}
+                      >
+                        {item.sentence}
+                      </button>
+                      <div className="home-row-note">{attentionNote(item.pages)}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
 
-        <section className="home-card" aria-labelledby="home-changes-heading">
-          <div className="home-card-head">
+        <section className="home-section home-changes" aria-labelledby="home-changes-heading">
+          <div className="home-section-head">
             <h2 id="home-changes-heading">Changed recently</h2>
-            <span className="home-card-count">{changesWindowLabel(home.changes)}</span>
+            <CountChip count={changeGroups.length} noun="page" />
+            <span className="home-head-meta">{changesWindowLabel(home.changes)}</span>
           </div>
 
-          {home.changes.length === 0 ? (
-            <p className="home-empty">No pages have changed recently.</p>
+          {changeGroups.length === 0 ? (
+            <QuietEmpty
+              icon={<ClockCounterClockwise size={16} aria-hidden="true" />}
+              text="No pages have changed recently."
+            />
           ) : (
-            home.changes.map((change) => (
-              <ChangeRow key={change.sha} change={change} onOpenPage={onFilterAttention} />
-            ))
+            <ol className="home-timeline">
+              {changeGroups.map((group) => (
+                <li key={group.key} className="home-timeline-item">
+                  <ChangeEntry group={group} onOpenPage={onFilterAttention} />
+                </li>
+              ))}
+            </ol>
           )}
         </section>
       </div>
@@ -108,50 +128,68 @@ export function Home({ home, error, onOpenReview, onFilterAttention }: Props) {
   );
 }
 
-interface ChangeRowProps {
-  change: HomeChange;
+// The chip shows the bare digit; the noun is still read out to assistive tech, so "138" next
+// to a heading is announced as "138 proposals".
+function CountChip({ count, noun }: { count: number; noun: string }) {
+  const [, ...rest] = plural(count, noun).split(" ");
+  return (
+    <span className="count home-count">
+      {count}
+      <span className="sr-only"> {rest.join(" ")}</span>
+    </span>
+  );
+}
+
+function QuietEmpty({ icon, text }: { icon: ReactNode; text: string }) {
+  return (
+    <p className="home-empty">
+      {icon}
+      <span>{text}</span>
+    </p>
+  );
+}
+
+interface ChangeEntryProps {
+  group: ChangeGroup;
   onOpenPage: (pages: HomePageRef[], label: string) => void;
 }
 
 // A change is only clickable when the backend could resolve it to a real indexed document
-// (internal/api/home.go's resolveChangeRef fills scope/slug/title together, or not at all —
-// see HomeChange's comment in lib/types.ts). Everything else — a memory-import commit, or any
-// tracked file the indexer never turned into a page — renders as plain, inert text instead of
+// (internal/api/home.go's resolveChangeRef fills scope/slug/title together, or not at all;
+// see HomeChange's comment in lib/types.ts). Everything else (a memory-import commit, or any
+// tracked file the indexer never turned into a page) renders as plain, inert text instead of
 // a button that would do nothing when pressed.
-function ChangeRow({ change, onOpenPage }: ChangeRowProps) {
-  const title = change.title ?? change.message;
-  const who = `${change.author_word}, ${relativeTime(change.when)}`;
-  const dotClass = dotClassForAuthor(change.author_word);
+function ChangeEntry({ group, onOpenPage }: ChangeEntryProps) {
+  const { latest, count } = group;
+  const title = latest.title ?? firstLine(latest.message);
+  const tickClass = latest.author_word === "you" ? "home-tick home-tick-you" : "home-tick";
+  const body = (
+    <>
+      <span className={tickClass} aria-hidden="true" />
+      <span className="home-entry-title"><RichTitle title={title} /></span>
+      <span className="home-entry-meta">
+        {latest.scope && <span className="home-entry-scope">{latest.scope}</span>}
+        <span>{`${latest.author_word}, ${relativeTime(latest.when)}`}</span>
+        {count > 1 && <span className="home-entry-updates">{plural(count, "update")}</span>}
+      </span>
+    </>
+  );
 
-  if (change.scope && change.slug && change.title) {
-    const scope = change.scope;
-    const slug = change.slug;
-    const pageTitle = change.title;
+  if (latest.scope && latest.slug && latest.title) {
+    const ref = { scope: latest.scope, slug: latest.slug, title: latest.title };
     return (
       <button
         type="button"
-        className="home-row home-row-change"
-        onClick={() => onOpenPage([{ scope, slug, title: pageTitle }], `Changed: ${pageTitle}`)}
-        aria-label={`Open ${pageTitle}`}
+        className="home-entry home-entry-link"
+        onClick={() => onOpenPage([ref], `Changed: ${ref.title}`)}
+        aria-label={`Open ${ref.title}`}
       >
-        <span className={`home-dot ${dotClass}`} aria-hidden="true" />
-        <div className="home-row-body">
-          <div className="home-row-title"><RichTitle title={title} /></div>
-          <div className="home-row-note">{who}</div>
-        </div>
+        {body}
       </button>
     );
   }
 
-  return (
-    <div className="home-row home-row-change home-row-static">
-      <span className={`home-dot ${dotClass}`} aria-hidden="true" />
-      <div className="home-row-body">
-        <div className="home-row-title"><RichTitle title={title} /></div>
-        <div className="home-row-note">{who}</div>
-      </div>
-    </div>
-  );
+  return <div className="home-entry home-entry-static">{body}</div>;
 }
 
 // ---- Greeting and summary ----
@@ -163,10 +201,12 @@ function greeting(owner: string): string {
   return name ? `Good ${timeWord}, ${name}.` : `Good ${timeWord}.`;
 }
 
-function summarySentence(home: HomeResponse): string {
+// changedPages counts grouped timeline entries, not raw commits: eight saves to one page are
+// one page that changed.
+function summarySentence(home: HomeResponse, changedPages: number): string {
   const waiting = home.waiting.total;
   const attention = home.attention.length;
-  const changes = home.changes.length;
+  const changes = changedPages;
 
   const waitingClause = waiting === 0
     ? "nothing is waiting for a decision"
@@ -302,10 +342,39 @@ function changesWindowLabel(changes: HomeChange[]): string {
   return `last ${oldest} days`;
 }
 
-function dotClassForAuthor(word: string): string {
-  if (word === "you") return "home-dot-you";
-  if (word === "an agent") return "home-dot-agent";
-  return "home-dot-connector";
+interface ChangeGroup {
+  key: string;
+  latest: HomeChange;
+  count: number;
+}
+
+// An agent that remembers into one daily page commits to it many times in a row; listing every
+// commit buried the rest of the timeline under "claude-code -- 2026-09-24" eight times. Changes
+// are grouped by the page they touch (scope/slug when resolved, the file path otherwise), in
+// order of each page's most recent change, and the newest commit speaks for the group.
+function groupChanges(changes: HomeChange[]): ChangeGroup[] {
+  const groups = new Map<string, ChangeGroup>();
+  for (const change of changes) {
+    const key = change.scope && change.slug ? `${change.scope}/${change.slug}` : change.path;
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, { key, latest: change, count: 1 });
+      continue;
+    }
+    const newer = timeOf(change.when) > timeOf(existing.latest.when) ? change : existing.latest;
+    groups.set(key, { key, latest: newer, count: existing.count + 1 });
+  }
+  return [...groups.values()];
+}
+
+function timeOf(iso: string): number {
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
+// Commit bodies can run to paragraphs; the timeline only ever shows the subject line.
+function firstLine(message: string): string {
+  return message.split("\n", 1)[0].trim();
 }
 
 const MINUTE_MS = 60_000;

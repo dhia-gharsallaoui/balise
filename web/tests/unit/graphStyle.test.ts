@@ -128,6 +128,37 @@ describe("buildGraphStylesheet", () => {
   });
 });
 
+describe("buildGraphStylesheet: refined marks", () => {
+  const palette = readGraphPalette(elementWithTokens({}));
+  const nodeRule = styleOf(buildGraphStylesheet(palette).find((r) => r.selector === "node.graph-node"));
+  const atZoom = (zoom: number, data: Record<string, unknown> = {}) => ({
+    cy: () => ({ zoom: () => zoom }),
+    data: (key: string) => data[key],
+  });
+
+  it("caps label width and ellipsises past it, so a long title can't run off the canvas", () => {
+    expect(nodeRule["text-wrap"]).toBe("ellipsis");
+    const maxWidth = nodeRule["text-max-width"] as (el: unknown) => string;
+    expect(maxWidth(atZoom(1))).toBe("160px");
+    // Zoom-compensated: at zoom 2 the model-space cap halves, so the on-screen cap holds.
+    expect(maxWidth(atZoom(2))).toBe("80px");
+  });
+
+  it("never grows a disc on screen past its model size, but lets it shrink below zoom 1", () => {
+    const width = nodeRule.width as (el: unknown) => number;
+    expect(width(atZoom(2.5, { size: 30 })) * 2.5).toBe(30);
+    expect(width(atZoom(0.5, { size: 30 }))).toBe(30);
+  });
+
+  it("hides a collision-suppressed label after the zoom and always-on rules, but hover still wins", () => {
+    const selectors = buildGraphStylesheet(palette).map((r) => r.selector);
+    const suppressed = selectors.indexOf("node.graph-node[?labelSuppressed]");
+    expect(suppressed).toBeGreaterThan(selectors.indexOf("node.graph-node[?labelAlways]"));
+    expect(suppressed).toBeGreaterThan(selectors.indexOf("node.graph-node.zoomed-in"));
+    expect(suppressed).toBeLessThan(selectors.indexOf("node.graph-node:selected, node.graph-node.graph-node-hover"));
+  });
+});
+
 describe("HUB_ZOOM_THRESHOLD", () => {
   it("is a finite positive number greater than 1 (a real zoom-in, not the resting zoom)", () => {
     expect(HUB_ZOOM_THRESHOLD).toBeGreaterThan(1);

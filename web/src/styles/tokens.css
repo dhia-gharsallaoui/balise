@@ -1,24 +1,23 @@
-/* web/src/styles/tokens.css — the only file permitted to contain a colour literal. */
+/* web/src/styles/tokens.css — the only file permitted to contain a colour literal.
+   Colour model: the interface itself is ink on cool neutrals. Hue appears only where it
+   carries meaning (page types, relation roles, ok / warn / issue). --accent is ink. */
 :root {
-  --bg: #F3F4F6;
-  --surface: #FFFFFF;
-  --surface-rail: #FBFBFC;
-  --surface-2: #F8F9FA;
-  --ink: #14171C;
-  --ink-body: #22262D;
-  --ink-2: #5B6572;
-  /* #8A93A0 (the v1-prototype value) fails WCAG AA text contrast (2.8-3.1:1)
-     against every surface it's used on — found by Task 8's axe scan against
-     the live app, not just a snippet. #666F7D keeps the same hue/tone but is
-     dark enough to clear 4.5:1 against the darkest of those surfaces
-     (--bg #F3F4F6, ratio 4.6:1). See batch-G-report.md. */
-  --ink-3: #666F7D;
-  --line: #E4E7EB;
-  --line-soft: #EEF0F3;
-  --line-strong: #C9D0D9;
-  --accent: #2E5AAC;
-  --accent-ink: #2E5AAC;
-  --accent-soft: #EEF2FA;
+  --bg: #F2F3F4;
+  --surface: #FCFCFD;
+  --surface-rail: #F7F8F9;
+  --surface-2: #EEF0F2;
+  --ink: #111418;
+  --ink-body: #23272E;
+  --ink-2: #555D68;
+  /* --ink-3 is the faintest text allowed: 4.9:1 against --surface-2, the darkest light
+     surface it sits on. Anything lighter fails WCAG AA for body text. */
+  --ink-3: #606874;
+  --line: #E1E4E8;
+  --line-soft: #EAECEF;
+  --line-strong: #C8CDD4;
+  --accent: #15181C;
+  --accent-ink: #15181C;
+  --accent-soft: #E7E9EC;
   --amber: #8A5A00;
   --amber-dot: #C08A2E;
   --amber-soft: #FBF0DC;
@@ -29,7 +28,7 @@
      (--type-procedure) at sizes/weights that already clear contrast elsewhere; --ok-text is
      the same hue, darkened just enough to clear both surfaces (5.3-6:1) for small text. */
   --ok-text: #2A7048;
-  --on-accent: #FFFFFF;
+  --on-accent: #FCFCFD;
   /* Review screen's reject-error banner (02-ui-design-v1.md section 5.3): a soft red-tinted
      background behind --type-issue text, same "-soft" pairing convention as --accent-soft. */
   --issue-soft: #FBEAEA;
@@ -62,37 +61,54 @@
   --role-derives: #2F9E5C;
   --role-owns: #B08600;
 
-  --font-ui: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Instrument Serif", Georgia, serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  /* One family, two cuts. Display headings get their presence from Geist at weight and
+     tight tracking, never from a second (serif) family. --font-display is kept as a name so
+     existing rules resolve, but it now points at the same sans. */
+  --font-ui: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SFMono-Regular", monospace;
 
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow-card: 0 1px 2px rgba(20, 23, 28, .04);
-  --shadow-action: 0 1px 2px rgba(20, 23, 28, .2);
+  /* Radius system: containers 10px, controls 7px, chips 5px. Nothing is pill-shaped. */
+  --radius: 10px;
+  --radius-sm: 7px;
+  --radius-xs: 5px;
+  /* Shadows are tinted with --ink's hue, not neutral black, and stay shallow: elevation
+     only where it means "this sits above the page" (cards, popovers). */
+  --shadow-card: 0 1px 0 rgba(17, 20, 24, .03), 0 1px 3px rgba(17, 20, 24, .05);
+  --shadow-action: 0 1px 2px rgba(17, 20, 24, .18);
+  --shadow-pop: 0 10px 30px -12px rgba(17, 20, 24, .25), 0 2px 6px rgba(17, 20, 24, .06);
   --duration: 300ms;
+  --duration-fast: 140ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* z-index scale: the only values any rule may use. */
+  --z-sticky: 10;
+  --z-nav: 20;
+  --z-pop: 30;
+  --z-skip: 40;
+
+  color-scheme: light;
 }
 
-/* Dark values derived from balise-docs/03-ui-prototype-v1.html. */
+/* Dark: tinted charcoal, never #000. --accent inverts to near-white so "ink" stays the
+   strongest mark on the page in both themes. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #14171B;
-    --surface: #1B1F25;
-    --surface-rail: #181C21;
-    --surface-2: #20252C;
-    --ink: #E6E9ED;
-    --ink-body: #D7DBE1;
-    --ink-2: #A6AEB9;
-    /* Same fix as the light-mode --ink-3 above: #6F7885 fails 4.5:1 against
-       --surface-2 (#20252C), the lightest surface it's used on in this
-       theme (3.45:1). #858D99 clears it (4.6:1) at the same hue/tone. */
-    --ink-3: #858D99;
-    --line: #2A3039;
-    --line-soft: #242A32;
-    --line-strong: #3A424D;
-    --accent: #86AFD6;
-    --accent-ink: #A7C6E6;
-    --accent-soft: #1E2A38;
+    --bg: #101215;
+    --surface: #171A1E;
+    --surface-rail: #131619;
+    --surface-2: #1E2227;
+    --ink: #ECEEF1;
+    --ink-body: #D4D8DE;
+    --ink-2: #A2AAB5;
+    /* Same floor as light: 5.0:1 against --surface-2, the lightest dark surface. */
+    --ink-3: #8C949F;
+    --line: #272B31;
+    --line-soft: #21252A;
+    --line-strong: #3A4048;
+    --accent: #ECEEF1;
+    --accent-ink: #ECEEF1;
+    --accent-soft: #262A30;
     --amber: #E3AC4E;
     --amber-dot: #C08A2E;
     --amber-soft: #3A2E14;
@@ -101,7 +117,7 @@
        --ok-text/--issue-text just reuse --ok/--type-issue rather than needing their own
        darkened dark-mode values. */
     --ok-text: #6FBF8C;
-    --on-accent: #14171B;
+    --on-accent: #101215;
     --issue-soft: #3A2024;
     --issue-text: #E08A99;
     --code-bg: rgba(230, 233, 237, .08);
@@ -122,17 +138,19 @@
     --role-derives: #7ED9A0;
     --role-owns: #E0B84E;
 
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, .3);
+    --shadow-card: 0 1px 0 rgba(0, 0, 0, .25), 0 1px 3px rgba(0, 0, 0, .3);
     --shadow-action: 0 1px 2px rgba(0, 0, 0, .5);
+    --shadow-pop: 0 12px 32px -12px rgba(0, 0, 0, .7), 0 2px 6px rgba(0, 0, 0, .3);
+    color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #14171B; --surface: #1B1F25; --surface-rail: #181C21; --surface-2: #20252C;
-  --ink: #E6E9ED; --ink-body: #D7DBE1; --ink-2: #A6AEB9; --ink-3: #858D99;
-  --line: #2A3039; --line-soft: #242A32; --line-strong: #3A424D;
-  --accent: #86AFD6; --accent-ink: #A7C6E6; --accent-soft: #1E2A38;
-  --amber: #E3AC4E; --amber-dot: #C08A2E; --amber-soft: #3A2E14; --ok: #6FBF8C; --ok-text: #6FBF8C; --on-accent: #14171B;
+  --bg: #101215; --surface: #171A1E; --surface-rail: #131619; --surface-2: #1E2227;
+  --ink: #ECEEF1; --ink-body: #D4D8DE; --ink-2: #A2AAB5; --ink-3: #8C949F;
+  --line: #272B31; --line-soft: #21252A; --line-strong: #3A4048;
+  --accent: #ECEEF1; --accent-ink: #ECEEF1; --accent-soft: #262A30;
+  --amber: #E3AC4E; --amber-dot: #C08A2E; --amber-soft: #3A2E14; --ok: #6FBF8C; --ok-text: #6FBF8C; --on-accent: #101215;
   --issue-soft: #3A2024; --issue-text: #E08A99;
   --code-bg: rgba(230, 233, 237, .08);
   --type-state: #7FB4CE; --type-decision: #9DA0E8; --type-gotcha: #E0A857;
@@ -141,8 +159,10 @@
   --type-note: #86CBC9;
   --role-link: #8B94A0; --role-about: #5FC9CB; --role-specializes: #B79AE8;
   --role-supersedes: #E68686; --role-derives: #7ED9A0; --role-owns: #E0B84E;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow-card: 0 1px 0 rgba(0, 0, 0, .25), 0 1px 3px rgba(0, 0, 0, .3);
   --shadow-action: 0 1px 2px rgba(0, 0, 0, .5);
+  --shadow-pop: 0 12px 32px -12px rgba(0, 0, 0, .7), 0 2px 6px rgba(0, 0, 0, .3);
+  color-scheme: dark;
 }
 
 @media (prefers-reduced-motion: reduce) {

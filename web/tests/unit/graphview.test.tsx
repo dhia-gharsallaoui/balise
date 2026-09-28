@@ -108,6 +108,29 @@ describe("GraphView", () => {
     expect(screen.queryByText("specializes")).toBeNull();
   });
 
+  it("lists the page types on the canvas in the legend, and the counts without middle dots", async () => {
+    mockGraph(baseGraph());
+    const GV = await loadGraphView();
+    render(<GV centre={null} onOpen={vi.fn()} />);
+    const legend = await screen.findByRole("list", { name: "Legend" });
+    const items = [...legend.querySelectorAll("li")].map((li) => li.textContent);
+    expect(items).toEqual(["gotcha", "memory", "note", "state", "about", "link"]);
+    expect(screen.getByText("5 pages")).toBeTruthy();
+    expect(screen.getByText("3 relations")).toBeTruthy();
+    expect(screen.getByText("1 scope")).toBeTruthy();
+    expect(document.querySelector(".global-summary")?.textContent).not.toContain("·");
+  });
+
+  it("keeps the zoom controls reachable by their accessible names", async () => {
+    mockGraph(baseGraph());
+    const GV = await loadGraphView();
+    render(<GV centre={CENTRE} onOpen={vi.fn()} />);
+    const group = await screen.findByRole("group", { name: "Graph zoom" });
+    for (const name of ["Zoom in", "Zoom out", "Fit graph to view"]) {
+      expect(group.querySelector(`button[aria-label="${name}"]`)).toBeTruthy();
+    }
+  });
+
   it("opens a page when its node is activated", async () => {
     mockGraph(baseGraph());
     const onOpen = vi.fn();

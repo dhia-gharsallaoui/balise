@@ -100,4 +100,15 @@ describe("PageRow", () => {
     await userEvent.keyboard("{Enter}");
     expect(onOpen).toHaveBeenCalled();
   });
+
+  it("omits the status word for an active page and its active claims", async () => {
+    render(<PageRow page={PAGE} onOpen={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: /expand/i }));
+    expect(screen.queryByText("active")).toBeNull();
+  });
+
+  it("keeps a non-active page status visible", () => {
+    render(<PageRow page={{ ...PAGE, status: "resolved" }} onOpen={vi.fn()} />);
+    expect(screen.getByText("resolved")).toBeTruthy();
+  });
 });

@@ -108,12 +108,12 @@ describe("SourcesScreen", () => {
     render(<SourcesScreen allScopes={["work", "client-globex"]} onOpenPage={onOpenPage} />);
     await screen.findByText(/no sources are connected/i);
 
-    // Exact string (not a regex) so this can't also match the drop-zone heading "Drop files
-    // here or paste text", which contains the same "or paste text" substring.
+    // Exact string (not a regex) so the label match stays unambiguous.
     await user.type(screen.getByLabelText("Or paste text"), "# Pasted Note\n\nSome content.");
     await user.click(screen.getByRole("button", { name: /add to vault/i }));
 
-    expect(await screen.findByText(/added "pasted note" to work/i)).toBeTruthy();
+    // The space name is its own mono span, so assert on the whole status line's text.
+    expect((await screen.findByRole("status")).textContent).toMatch(/added "pasted note" to work/i);
     await user.click(screen.getByRole("button", { name: /open it/i }));
     expect(onOpenPage).toHaveBeenCalledWith(
       [{ scope: "work", slug: "pasted-note", title: "Pasted Note" }],
@@ -121,7 +121,7 @@ describe("SourcesScreen", () => {
     );
   });
 
-  it("loads a selected markdown file into the form and shows its name", async () => {
+  it("loads a selected markdown file into the form, shows its name, and can remove it", async () => {
     vi.stubGlobal("fetch", mockFetch());
     const user = userEvent.setup();
     render(<SourcesScreen allScopes={["work"]} />);
@@ -130,7 +130,39 @@ describe("SourcesScreen", () => {
     const file = new File(["# From File\n\nBody text."], "notes.md", { type: "text/markdown" });
     await user.upload(screen.getByLabelText(/choose a file/i), file);
 
-    expect(await screen.findByText(/loaded "notes\.md"/i)).toBeTruthy();
+    expect(await screen.findByText("notes.md")).toBeTruthy();
+    const paste = screen.getByLabelText("Or paste text") as HTMLTextAreaElement;
+    expect(paste.value).toContain("# From File");
+
+    await user.click(screen.getByRole("button", { name: /remove notes\.md/i }));
+    expect(screen.queryByText("notes.md")).toBeNull();
+    expect(paste.value).toBe("");
+    // Back to the dropzone prompt, whose "choose one" button opens the hidden file input.
+    expect(screen.getByRole("button", { name: /choose one/i })).toBeTruthy();
+  });
+
+  it("collapses consecutive identical ingest entries into one row with a count", async () => {
+    const repeated = (sha: string) => ({
+      sha,
+      path: "memory/claude-code.md",
+      message: "claude-code -- 2026-09-24",
+      author_word: "you",
+      when: "2026-09-24T08:00:00Z",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/sources/log")) {
+          return jsonResponse({ ingests: [repeated("a1"), repeated("a2"), repeated("a3")] });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+    render(<SourcesScreen allScopes={["work"]} />);
+    expect(await screen.findAllByText("claude-code -- 2026-09-24")).toHaveLength(1);
+    expect(screen.getByText("3 entries")).toBeTruthy();
+    expect(screen.getByText(/times/).parentElement?.textContent).toBe("3 times");
   });
 
   it("refuses a file that is neither markdown nor plain text", async () => {

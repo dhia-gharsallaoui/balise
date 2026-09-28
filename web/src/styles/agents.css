@@ -1,83 +1,196 @@
-/* web/src/styles/agents.css — the Agents screen (02-ui-design-v1.md section 5.5). Two cards,
-   left list / right detail, matching the visual language of home.css's cards
-   (surface/line/radius/shadow-card) and knowledge-v3.html's two-column Agents layout. State
-   (active/revoked/expired) gets two different treatments on purpose: "active" is a quiet
-   word+dot (echoing review.css's .review-confidence), because active is the expected, unremarkable
-   case; "revoked"/"expired" are bold soft-background badges (echoing review.css's .review-mark-*),
-   because those are the states a person must not miss. */
+/* web/src/styles/agents.css: the Agents screen (02-ui-design-v1.md section 5.5). List on the
+   left, detail on the right; stacked below 900px, where two columns would squeeze the activity
+   text into a ribbon. Buttons, fields, counts and the two panels come from controls.css; this
+   file only lays them out and styles what is specific to agents (rows, state marks, activity,
+   the one-time key block and the Danger footer). State is always a 7px dot plus an ink-2 word:
+   the hue marks the state, the word names it. */
 
 .agents-screen {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 18px;
+  grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
-  padding: 22px 28px 60px;
+  padding: 24px 28px 64px;
+  animation: rise var(--duration) var(--ease-out) both;
+}
+
+@media (max-width: 900px) {
+  .agents-screen { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 720px) {
+  .agents-screen { padding: 16px 16px 32px; gap: 16px; }
 }
 
 .agents-list-card,
 .agents-detail-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
-  animation: agents-rise var(--duration) ease both;
+  min-width: 0;
+  overflow: hidden;
 }
 
-@keyframes agents-rise {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+.agents-empty-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-3);
 }
+
+.agents-form-error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--issue-text);
+}
+
+/* ---- State mark ---- */
+
+.agents-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.agents-state::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  flex: none;
+}
+
+.agents-state-active::before { background: var(--ok); }
+.agents-state-revoked::before { background: var(--type-issue); }
+.agents-state-expired::before { background: var(--amber-dot); }
 
 /* ---- Left: the list ---- */
 
 .agents-list-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  padding: 16px 18px 10px;
+  padding: 14px 16px 12px 18px;
+  border-bottom: 1px solid var(--line);
 }
 
 .agents-list-head h2 {
   margin: 0;
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--ink);
 }
 
-.agents-list-count {
+.agents-add-toggle { margin-left: auto; }
+
+.agents-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agents-list > li + li { border-top: 1px solid var(--line-soft); }
+
+.agents-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 11px 16px 11px 18px;
+  text-align: left;
+  color: var(--ink);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.agents-row:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+
+/* The selected row is marked by surface and an ink leading edge, not a tint. */
+.agents-row.is-selected { background: var(--surface-2); }
+.agents-row.is-selected::before {
+  content: "";
+  position: absolute;
+  inset: 8px auto 8px 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--ink);
+}
+
+.agents-avatar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-family: var(--font-mono);
   font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.agents-row.is-selected .agents-avatar { background: var(--surface); }
+
+.agents-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agents-row-name {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agents-row-meta {
+  font-size: 12.5px;
+  line-height: 1.4;
   color: var(--ink-3);
 }
 
-/* ---- Add agent: toggle + form ---- */
+.agents-row-side {
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
 
-.agents-add-toggle {
-  margin-left: auto;
-  padding: 5px 10px;
+.agents-row-used {
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.agents-list-empty { padding: 16px 18px; }
+
+.agents-list-foot {
+  margin: 0;
+  padding: 12px 18px 14px;
+  border-top: 1px solid var(--line);
   font-size: 12.5px;
-  font-weight: 600;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line-strong);
-  background: var(--surface-2);
-  color: var(--ink);
-  cursor: pointer;
+  line-height: 1.5;
+  color: var(--ink-3);
 }
 
-.agents-add-toggle:hover {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
+/* ---- Add agent form ---- */
 
 .agents-add-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin: 0 18px 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  gap: 14px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-2) 45%, var(--surface));
 }
 
 .agents-form-field {
@@ -87,456 +200,170 @@
   margin: 0;
   padding: 0;
   border: 0;
+  min-width: 0;
 }
 
+.agents-form-field > label,
 .agents-form-field legend {
   padding: 0;
-  font-size: 12px;
-  color: var(--ink-3);
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
 }
 
-.agents-form-field > label {
-  font-size: 12px;
-  color: var(--ink-3);
-}
+.agents-form-field > label { margin-bottom: 0; }
 
-.agents-form-field input[type="text"],
-.agents-form-field input[type="date"] {
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 13.5px;
-}
-
-.agents-form-field input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
+.agents-date { max-width: 200px; }
 
 .agents-checkbox-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 16px;
+  gap: 6px;
 }
 
 .agents-checkbox {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
   font-size: 13px;
-  color: var(--ink-body);
+  color: var(--ink);
   cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out);
 }
 
-.agents-checkbox input {
-  margin: 0;
-}
+.agents-checkbox:hover { border-color: var(--ink-3); }
+.agents-checkbox:has(input:checked) { border-color: var(--ink); background: var(--surface-2); }
+.agents-checkbox:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: 2px; }
+.agents-checkbox input { margin: 0; }
+.agents-checkbox input:focus-visible { outline: none; }
 
-.agents-checkbox input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.agents-form-error {
-  margin: 0;
-  padding: 8px 12px;
-  background: var(--issue-soft);
-  color: var(--type-issue);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
+.agents-checkbox-mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
 }
 
 .agents-form-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
 }
 
-.agents-form-submit,
-.agents-form-cancel {
-  padding: 6px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.agents-form-submit {
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.agents-form-cancel {
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-}
-
-.agents-form-submit:disabled,
-.agents-form-cancel:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.agents-form-submit:focus-visible,
-.agents-form-cancel:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* ---- The one-time access-key reveal ---- */
+/* ---- One-time access key ---- */
 
 .agents-token-panel {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin: 0 18px 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--amber-dot);
-  border-radius: var(--radius-sm);
-  background: var(--amber-soft);
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
 }
 
 .agents-token-warning {
   margin: 0;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--amber);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.agents-token-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
 }
 
 .agents-token-value {
-  display: block;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--code-bg);
-  color: var(--ink);
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
   font-family: var(--font-mono);
   font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: none;
   word-break: break-all;
   user-select: all;
 }
 
-.agents-token-actions {
-  display: flex;
-  gap: 8px;
-}
+.agents-token-copy { flex: none; }
 
-.agents-token-copy,
-.agents-token-done {
-  padding: 6px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
+.agents-token-actions { display: flex; }
 
-.agents-token-copy {
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.agents-token-done {
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-}
-
-.agents-token-copy:focus-visible,
-.agents-token-done:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.agents-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.agents-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 18px;
-  border: 0;
-  border-top: 1px solid var(--line-soft);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-
-.agents-row:hover {
-  background: var(--surface-2);
-}
-
-.agents-row.is-selected {
-  background: var(--accent-soft);
-}
-
-/* --accent-soft's dark value is dark enough that --ink-3 (the row's normal meta/used color)
-   drops to 4.34:1 against it — just under the 4.5:1 minimum. --ink-2, lighter, clears it
-   (6.5:1) without changing anything for the unselected rows most of the list is in. */
-.agents-row.is-selected .agents-row-meta,
-.agents-row.is-selected .agents-row-used {
-  color: var(--ink-2);
-}
-
-.agents-avatar {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-2);
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.agents-row-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.agents-row-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--ink);
-}
-
-.agents-row-meta {
-  font-size: 12.5px;
-  color: var(--ink-3);
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agents-row-side {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
-
-.agents-row-used {
-  font-size: 12.5px;
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-
-.agents-list-foot {
-  margin: 0;
-  padding: 12px 18px 16px;
-  font-size: 12.5px;
-  color: var(--ink-3);
-  border-top: 1px solid var(--line-soft);
-}
-
-/* ---- State: quiet word+dot for active, bold badge for revoked/expired ---- */
-
-.agents-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12.5px;
-  font-weight: 600;
-  /* --ok-text (not --ok) — see tokens.css: --ok alone is under 4.5:1 at this size. */
-  color: var(--ok-text);
-}
-
-.agents-state::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.agents-state-badge {
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 1px 7px;
-  border-radius: 999px;
-}
-
-.agents-state-badge-revoked {
-  background: var(--issue-soft);
-  /* --issue-text (not --type-issue) — see tokens.css: --type-issue alone is 4.33:1 at this
-     size, just under the 4.5:1 small-text minimum. */
-  color: var(--issue-text);
-}
-
-.agents-state-badge-expired {
-  background: var(--amber-soft);
-  color: var(--amber);
-}
-
-/* ---- Right: the detail card ---- */
+/* ---- Right: the detail ---- */
 
 .agents-detail-head {
-  padding: 18px 18px 0;
+  padding: 20px 22px 16px;
+}
+
+.agents-detail-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
 }
 
 .agents-detail-name {
   margin: 0;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 22px;
+  min-width: 0;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
   color: var(--ink);
-  display: inline-block;
-  margin-right: 8px;
+  overflow-wrap: anywhere;
 }
 
 .agents-boundary {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   font-size: 14px;
-  line-height: 1.55;
-  color: var(--ink-body);
-  background: var(--surface-2);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-}
-
-/* ---- Revoke: a plain button until confirmed, then a dedicated panel (modeled on
-   review.css's .review-reject-panel) — instant and hard to trigger by accident. ---- */
-
-.agents-revoke-button {
-  margin-top: 12px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--type-issue);
-  cursor: pointer;
-}
-
-.agents-revoke-button:hover {
-  background: var(--issue-soft);
-  border-color: var(--type-issue);
-}
-
-.agents-revoke-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  max-width: 420px;
-}
-
-.agents-revoke-panel p {
-  margin: 0;
-  font-size: 13.5px;
   line-height: 1.5;
-  color: var(--ink-body);
+  color: var(--ink-2);
 }
 
-.agents-action-error {
-  margin: 0;
-  padding: 8px 12px;
-  background: var(--issue-soft);
-  color: var(--type-issue);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-}
-
-.agents-revoke-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.agents-revoke-confirm,
-.agents-revoke-cancel {
-  padding: 6px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.agents-revoke-confirm {
-  border: 1px solid var(--type-issue);
-  background: var(--type-issue);
-  color: var(--on-accent);
-}
-
-.agents-revoke-cancel {
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-}
-
-.agents-revoke-confirm:disabled,
-.agents-revoke-cancel:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.agents-revoke-button:focus-visible,
-.agents-revoke-confirm:focus-visible,
-.agents-revoke-cancel:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
+/* An underline tab bar: the selected tab carries an ink rule, the rest are quiet text. */
 .agents-tabs {
   display: flex;
-  gap: 2px;
-  padding: 16px 18px 0;
-  border-bottom: 1px solid var(--line-soft);
-  margin-top: 14px;
+  gap: 4px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
 }
 
 .agents-tab {
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-3);
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-}
-
-.agents-tab.is-active {
-  color: var(--accent-ink);
-  border-bottom-color: var(--accent);
-}
-
-.agents-tab:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.agents-tab-panel {
-  padding: 4px 0 18px;
-}
-
-.agents-empty-note {
-  margin: 0;
-  padding: 16px 18px;
+  position: relative;
+  min-height: 38px;
+  padding: 0 8px;
   font-size: 13.5px;
+  font-weight: 500;
   color: var(--ink-3);
+  transition: color var(--duration-fast) var(--ease-out);
 }
+
+.agents-tab:hover:not(:disabled) { color: var(--ink); }
+.agents-tab:disabled { cursor: not-allowed; opacity: 0.6; }
+
+.agents-tab.is-active { color: var(--ink); }
+.agents-tab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--ink);
+}
+
+.agents-tab-panel { padding: 4px 22px 16px; }
+.agents-tab-panel > .agents-empty-note { padding: 14px 0 4px; }
 
 .agents-activity-list {
   list-style: none;
@@ -546,46 +373,89 @@
 
 .agents-activity-row {
   display: grid;
-  grid-template-columns: 66px minmax(0, 1fr);
-  gap: 10px;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--line-soft);
-  font-size: 14px;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 14px;
+  padding: 11px 0;
 }
 
-.agents-activity-row:last-child {
-  border-bottom: none;
-}
+.agents-activity-row + .agents-activity-row { border-top: 1px solid var(--line-soft); }
 
 .agents-activity-when {
+  padding-top: 1px;
   font-size: 12.5px;
   color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
+.agents-activity-body { min-width: 0; }
+
 .agents-activity-query {
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--ink-body);
+  overflow-wrap: anywhere;
 }
 
 .agents-activity-note {
+  margin-top: 2px;
   font-size: 12.5px;
   color: var(--ink-3);
-  margin-top: 3px;
 }
 
-.agents-row:focus-visible,
-.agents-tab:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+.agents-activity-more { margin: 4px 0 0 102px; }
+
+@media (max-width: 520px) {
+  .agents-activity-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .agents-activity-more { margin-left: -8px; }
 }
 
-.agents-add-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+/* ---- Danger footer: revoke lives last, apart from everything a person does routinely ---- */
+
+.agents-danger {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 16px 22px 18px;
+  border-top: 1px solid var(--line);
 }
 
-@media (max-width: 900px) {
-  .agents-screen {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 16px 14px 40px;
-  }
+.agents-danger-text { flex: 1 1 240px; min-width: 0; }
+
+.agents-danger-text h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
 }
+
+.agents-danger-text p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.agents-revoke-panel {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--type-issue) 40%, var(--line));
+  background: var(--issue-soft);
+}
+
+.agents-revoke-panel > p:first-child {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.agents-revoke-actions { display: flex; gap: 8px; }
+
+.agents-detail-empty { padding: 22px; }

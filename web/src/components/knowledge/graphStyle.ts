@@ -39,6 +39,7 @@ export interface GraphPalette {
   accent: string;
   onAccent: string;
   fontUi: string;
+  fontMono: string;
   types: Record<TypeName, string>;
   roles: Record<string, string>;
 }
@@ -64,6 +65,7 @@ const FALLBACK: GraphPalette = {
   accent: "Highlight",
   onAccent: "HighlightText",
   fontUi: "system-ui, sans-serif",
+  fontMono: "ui-monospace, monospace",
   types: {
     state: "GrayText",
     decision: "GrayText",
@@ -122,6 +124,7 @@ export function readGraphPalette(root: Element = document.documentElement): Grap
     accent: get("--accent", FALLBACK.accent),
     onAccent: get("--on-accent", FALLBACK.onAccent),
     fontUi: get("--font-ui", FALLBACK.fontUi),
+    fontMono: get("--font-mono", FALLBACK.fontMono),
     types,
     roles,
   };
@@ -186,9 +189,39 @@ const MIN_ZOOM_FOR_FONT_SCALING = 0.05;
 // graph's corpus actually produces (measured 0.43-0.61 across the required viewports), so in
 // practice full compensation is what's visible; it only engages as a circuit-breaker if a
 // future re-layout or a much bigger corpus pushes fit-to-content zoom lower than that.
-function zoomCompensatedFontSize(targetPx: number): (el: NodeSingular) => number {
+function zoomCompensated(targetPx: number): (el: NodeSingular) => number {
   const maxPx = targetPx * 2.5;
   return (el) => Math.min(maxPx, targetPx / Math.max(el.cy().zoom(), MIN_ZOOM_FOR_FONT_SCALING));
+}
+
+function zoomCompensatedFontSize(targetPx: number): (el: NodeSingular) => number {
+  return zoomCompensated(targetPx);
+}
+
+// A node label is capped at this many on-screen px and ellipsised past it. Uncapped, one long
+// claim-style title ("Every generation gets a permanent run_id recording full provenance")
+// painted a 400px strip across its neighbours and off the canvas edge. The cap is
+// zoom-compensated exactly like the font, so it holds on screen whatever fit-to-content picked;
+// the full title is one hover away (the label cascade shows it) and always in the a11y list.
+const LABEL_MAX_WIDTH_PX = 160;
+
+// Geometry (disc size, ring width, edge width) that must not *grow* on screen past its model
+// size when the user zooms in, or when a small vault fit-zooms in to fill the frame: the
+// graph spreads out, the marks stay refined. Below zoom 1 it scales down normally, since the
+// layout packed nodes assuming their model size and inflating them would make them overlap.
+type Sized = NodeSingular | EdgeSingular;
+
+function noGrow(px: number): (el: Sized) => number {
+  return (el) => px / Math.max(el.cy().zoom(), 1);
+}
+
+function nodeDiameter(el: NodeSingular): number {
+  return noGrow(Number(el.data("size")) || 0)(el);
+}
+
+function zoomCompensatedMaxWidth(targetPx: number): (el: NodeSingular) => string {
+  const scale = zoomCompensated(targetPx);
+  return (el) => `${scale(el)}px`;
 }
 
 /**
@@ -206,112 +239,127 @@ export function buildGraphStylesheet(palette: GraphPalette): StylesheetJsonBlock
       selector: "node.graph-scope",
       style: {
         shape: "round-rectangle",
+        "corner-radius": "10px",
         "background-color": palette.surface2,
-        "background-opacity": 0.6,
-        "border-width": 1.5,
-        "border-color": palette.line,
+        "background-opacity": 0.35,
+        "border-width": (el: NodeSingular) => noGrow(1)(el),
+        "border-color": palette.lineStrong,
         "border-style": "dashed",
         label: "data(label)",
         "text-valign": "top",
         "text-halign": "center",
-        "font-family": palette.fontUi,
-        // Scope labels are always on (no text-opacity toggle below) — zoomCompensatedFontSize
-        // keeps them at a legible on-screen size even when the fit-to-content zoom is well
-        // under 1, instead of shrinking in lockstep (or vanishing outright — see the comment
-        // above HUB_ZOOM_THRESHOLD) with the rest of the canvas.
-        "font-size": zoomCompensatedFontSize(15),
-        "font-weight": 600,
-        color: palette.ink2,
+        // A scope is a quiet container, not a heading: mono (scopes are identifiers
+        // everywhere else in the app) at meta size in ink-3.
+        "font-family": palette.fontMono,
+        // Always on (no text-opacity toggle below): zoomCompensatedFontSize keeps the title at
+        // a fixed on-screen size even when the fit-to-content zoom is well under 1, instead of
+        // shrinking in lockstep (or vanishing, see the comment above HUB_ZOOM_THRESHOLD).
+        "font-size": zoomCompensatedFontSize(12),
+        "font-weight": 400,
+        color: palette.ink3,
         "text-margin-y": -6,
-        // Trimmed from 28px: this is pure margin between a scope's outer box and its
-        // children's own footprint, on all four sides — at 8 nodes it was a visibly larger
-        // empty border than the cluster needed, and it's one of the few knobs here that
-        // shrinks a compound's box without touching node/label size or layout spacing.
+        // Pure margin between the scope's outer box and its children's own footprint.
         padding: "18px",
-        // Cytoscape's compound auto-sizing defaults to "include" here — the scope box is
-        // sized to fit every descendant's label bounding box regardless of that label's
-        // text-opacity. Since almost all node labels are invisible at rest (graphStyle's own
-        // density cascade below), that default was inflating every scope box to the width of
-        // its widest hidden title (e.g. "Recreating an AKS node pool drops custom taints"),
-        // which was large enough that adjacent scope boxes overlapped on screen even though
-        // the node circles inside them never did. "exclude" sizes the box to the children's
-        // actual rendered geometry (nodes + padding), which is what a compound cluster
-        // boundary should reflect.
+        // Cytoscape's compound auto-sizing defaults to "include": the scope box would grow to
+        // fit every descendant's label box whether or not that label is painted, which made
+        // adjacent scopes overlap on screen. "exclude" sizes it to the children's rendered
+        // geometry (nodes + padding), which is what a cluster boundary should reflect.
         "compound-sizing-wrt-labels": "exclude",
       },
+    },
+    // A small graph shows every label (useCytoscapeGraph's label-aware layout), so there the
+    // scope box should wrap them too, instead of titles spilling over its dashed edge.
+    {
+      selector: "node.graph-scope.graph-scope-fit-labels",
+      style: { "compound-sizing-wrt-labels": "include" },
     },
     {
       selector: "node.graph-node",
       style: {
         shape: "ellipse",
-        width: "data(size)",
-        height: "data(size)",
+        width: nodeDiameter,
+        height: nodeDiameter,
         "background-color": (el: NodeSingular) =>
           palette.types[el.data("type") as TypeName] ?? palette.accent,
-        "border-width": 2,
+        // A thin surface-coloured ring separates a disc from edges and from an overlapping
+        // neighbour, the way a map marker is cut out of the terrain under it.
+        "border-width": noGrow(2),
         "border-color": palette.surface,
         label: "data(label)",
         "font-family": palette.fontUi,
-        // Whichever labels the density cascade below turns on (hubs/centre at rest, every
-        // label once zoomed past HUB_ZOOM_THRESHOLD) must still be readable at whatever zoom
-        // fit-to-content settled on — zoomCompensatedFontSize pins their on-screen size at
-        // 14px regardless of how zoomed out the view is, so "fewer labels, but legible"
-        // actually holds at rest instead of the labels being hidden outright.
-        "font-size": zoomCompensatedFontSize(14),
-        color: palette.ink,
+        // Whichever labels the density cascade below turns on must be readable at whatever zoom
+        // fit-to-content settled on: zoomCompensatedFontSize pins their on-screen size at 12px.
+        "font-size": zoomCompensatedFontSize(12),
+        "font-weight": 500,
+        color: palette.inkBody,
         "text-valign": "bottom",
         "text-halign": "center",
-        "text-margin-y": 4,
+        // Clears the disc plus its widest (selected/centre) ring and the label plate's padding.
+        "text-margin-y": noGrow(8),
+        "text-wrap": "ellipsis",
+        "text-max-width": zoomCompensatedMaxWidth(LABEL_MAX_WIDTH_PX),
+        // Labels sit on a surface-coloured plate so an edge running behind them never cuts
+        // through the text.
         "text-background-color": palette.surface,
-        "text-background-opacity": 0.85,
-        "text-background-padding": "2px",
+        "text-background-opacity": 0.92,
+        "text-background-padding": (el: NodeSingular) => `${noGrow(3)(el)}px`,
+        "text-background-shape": "roundrectangle",
         "text-opacity": 0,
-        "transition-property": "background-color, border-color",
-        "transition-duration": 150,
+        "transition-property": "border-color, border-width, opacity",
+        "transition-duration": 140,
       },
     },
     {
       selector: "node.graph-node-centre",
       style: {
-        "border-width": 4,
-        "border-color": palette.accent,
+        "border-width": noGrow(3),
+        "border-color": palette.ink,
       },
     },
     // Label-density cascade: base hide, `.zoomed-in` shows everything, `[?labelAlways]`
-    // (a boolean data flag — the `?` presence-selector) always wins regardless of zoom.
+    // (a boolean data flag, the `?` presence-selector) always wins regardless of zoom, and
+    // `[?labelSuppressed]` (set at runtime by useCytoscapeGraph's collision pass) hides a label
+    // that would print over another. Hover/selection, last, always shows its own label.
     { selector: "node.graph-node.zoomed-in", style: { "text-opacity": 1 } },
     { selector: "node.graph-node[?labelAlways]", style: { "text-opacity": 1 } },
+    { selector: "node.graph-node[?labelSuppressed]", style: { "text-opacity": 0 } },
     {
       selector: "node.graph-node:selected, node.graph-node.graph-node-hover",
-      style: { "border-color": palette.accent, "border-width": 3, "text-opacity": 1 },
+      style: {
+        "border-color": palette.ink,
+        "border-width": noGrow(3),
+        "text-opacity": 1,
+        color: palette.ink,
+        "z-index": 20,
+      },
     },
     {
       selector: "node.graph-node.graph-node-dim",
-      style: { opacity: 0.35 },
+      style: { opacity: 0.3 },
     },
     {
       selector: "edge.graph-edge",
       style: {
-        width: 1.5,
+        width: noGrow(1.25),
         "curve-style": "bezier",
-        "line-color": (el: EdgeSingular) => palette.roles[el.data("kind")] ?? palette.line,
-        "target-arrow-color": (el: EdgeSingular) => palette.roles[el.data("kind")] ?? palette.line,
+        "line-color": (el: EdgeSingular) => palette.roles[el.data("kind")] ?? palette.lineStrong,
+        "target-arrow-color": (el: EdgeSingular) => palette.roles[el.data("kind")] ?? palette.lineStrong,
         "target-arrow-shape": "triangle",
-        "arrow-scale": 0.8,
-        opacity: 0.75,
+        "arrow-scale": 0.7,
+        opacity: 0.8,
       },
     },
     {
       selector: 'edge.graph-edge[kind = "link"]',
-      style: { "line-style": "dashed" },
+      style: { "line-style": "dashed", "line-dash-pattern": [4, 3] },
     },
     {
       selector: "edge.graph-edge.graph-edge-dim",
-      style: { opacity: 0.12 },
+      style: { opacity: 0.1 },
     },
     {
       selector: "edge.graph-edge.graph-edge-hover",
-      style: { width: 3, opacity: 1 },
+      style: { width: noGrow(2), opacity: 1 },
     },
   ];
 }

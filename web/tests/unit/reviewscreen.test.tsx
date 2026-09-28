@@ -54,6 +54,8 @@ const DETAIL_2: ReviewDetail = {
   evidence: [{ source: "client-globex/gotchas/arc.md", text: "A reimage leaves a live ARM Arc record." }],
 };
 
+// The target title shows twice once a proposal is open (its queue row and the detail heading),
+// so tests wait on the detail's heading: that is the moment the action buttons exist.
 function jsonResponse(body: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => body };
 }
@@ -103,13 +105,43 @@ describe("ReviewScreen", () => {
     expect(html.indexOf("Evidence")).toBeLessThan(html.indexOf("Current"));
     expect(screen.getByText("reworded")).toBeTruthy();
     expect(screen.getByText("added")).toBeTruthy();
+    // A reworded claim shows its old wording, struck through, above the new wording.
+    const struck = document.querySelector(".review-claim-reworded s");
+    expect(struck?.textContent).toBe("Duplicate component label kills telemetry");
+  });
+
+  it("shows a failed action as an alert banner", async () => {
+    const fetcher = mockFetch();
+    fetcher.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") return jsonResponse({ detail: "vault is locked" }, 409);
+      if (url.includes("/api/review/p-1")) return jsonResponse(DETAIL_1);
+      return jsonResponse(LIST);
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const user = userEvent.setup();
+    render(<ReviewScreen onOpenPage={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Alloy duplicate component kills telemetry" });
+    await user.click(screen.getByRole("button", { name: "Accept" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("vault is locked");
+  });
+
+  it("hides the standing actions while a reject reason is open, and brings them back on cancel", async () => {
+    vi.stubGlobal("fetch", mockFetch());
+    const user = userEvent.setup();
+    render(<ReviewScreen onOpenPage={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Alloy duplicate component kills telemetry" });
+    await user.click(screen.getByRole("button", { name: "Reject" }));
+    expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Accept" })).toBeTruthy();
   });
 
   it("opens a real editing panel for each added/reworded claim, not a disabled stub", async () => {
     vi.stubGlobal("fetch", mockFetch());
     const user = userEvent.setup();
     render(<ReviewScreen onOpenPage={vi.fn()} />);
-    await screen.findByText("Alloy duplicate component kills telemetry");
+    await screen.findByRole("heading", { name: "Alloy duplicate component kills telemetry" });
     const editButton = screen.getByRole("button", { name: /^edit then accept$/i });
     expect(editButton.hasAttribute("disabled")).toBe(false);
     await user.click(editButton);
@@ -123,7 +155,7 @@ describe("ReviewScreen", () => {
     vi.stubGlobal("fetch", fetcher);
     const user = userEvent.setup();
     render(<ReviewScreen onOpenPage={vi.fn()} />);
-    await screen.findByText("Alloy duplicate component kills telemetry");
+    await screen.findByRole("heading", { name: "Alloy duplicate component kills telemetry" });
     await user.click(screen.getByRole("button", { name: /^edit then accept$/i }));
     const newClaimField = await screen.findByLabelText(/new claim/i);
     await user.clear(newClaimField);
@@ -143,7 +175,7 @@ describe("ReviewScreen", () => {
     vi.stubGlobal("fetch", mockFetch());
     const user = userEvent.setup();
     render(<ReviewScreen onOpenPage={vi.fn()} />);
-    await screen.findByText("Alloy duplicate component kills telemetry");
+    await screen.findByRole("heading", { name: "Alloy duplicate component kills telemetry" });
     await user.click(screen.getByRole("button", { name: /^edit then accept$/i }));
     const newClaimField = await screen.findByLabelText(/new claim/i);
     await user.clear(newClaimField);
@@ -160,7 +192,7 @@ describe("ReviewScreen", () => {
     vi.stubGlobal("fetch", mockFetch());
     const user = userEvent.setup();
     render(<ReviewScreen onOpenPage={vi.fn()} />);
-    await screen.findByText("Alloy duplicate component kills telemetry");
+    await screen.findByRole("heading", { name: "Alloy duplicate component kills telemetry" });
     await user.click(screen.getByRole("button", { name: /^edit then accept$/i }));
     const newClaimField = await screen.findByLabelText(/new claim/i);
     await user.clear(newClaimField);
@@ -174,7 +206,7 @@ describe("ReviewScreen", () => {
     vi.stubGlobal("fetch", mockFetch());
     const user = userEvent.setup();
     render(<ReviewScreen onOpenPage={vi.fn()} />);
-    await screen.findByText("Alloy duplicate component kills telemetry");
+    await screen.findByRole("heading", { name: "Alloy duplicate component kills telemetry" });
     await user.keyboard("e");
     expect(await screen.findByLabelText(/new claim/i)).toBeTruthy();
   });
@@ -184,7 +216,7 @@ describe("ReviewScreen", () => {
     vi.stubGlobal("fetch", fetcher);
     const user = userEvent.setup();
     render(<ReviewScreen onOpenPage={vi.fn()} />);
-    await screen.findByText("Alloy duplicate component kills telemetry");
+    await screen.findByRole("heading", { name: "Alloy duplicate component kills telemetry" });
     await user.click(screen.getByRole("button", { name: "Accept" }));
     await waitFor(() => {
       expect(fetcher.mock.calls.some(([u, i]) => String(u).includes("/api/review/p-1/accept") && (i as RequestInit)?.method === "POST")).toBe(true);
@@ -196,7 +228,7 @@ describe("ReviewScreen", () => {
     vi.stubGlobal("fetch", fetcher);
     const user = userEvent.setup();
     render(<ReviewScreen onOpenPage={vi.fn()} />);
-    await screen.findByText("Alloy duplicate component kills telemetry");
+    await screen.findByRole("heading", { name: "Alloy duplicate component kills telemetry" });
     await user.click(screen.getByRole("button", { name: "Reject" }));
     await user.click(screen.getByRole("button", { name: "Confirm reject" }));
     expect(screen.getByText(/reason must be a single non-empty line/i)).toBeTruthy();

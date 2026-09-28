@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Home } from "../../src/components/home/Home";
 import type { HomeResponse } from "../../src/lib/types";
 
-// Home was rebuilt from 02-ui-design-v1.md section 5.1's plain-sentence "briefing" to the
-// card-grid design in /tmp/balise-design/knowledge-v3.html (lines 74-121) — see
-// docs/superpowers/specs/2026-09-16-balise-vertical-slice-design.md section 9. These tests
-// check the new shape: three cards, scope-grouped waiting rows, and that the one place numbers
-// must read as prose (the summary sentence) actually does, while everywhere else keeps digits.
+// Home: a greeting hero over a two-column grid (waiting + attention on the left, a "Changed
+// recently" timeline on the right). These tests pin the section order, scope-grouped waiting
+// rows, per-page grouping of changes, and that the one place numbers read as prose (the
+// summary sentence) actually does, while everywhere else keeps digits. The topbar owns the
+// page's <h1>, so the greeting is a paragraph and no heading on this screen is above h2.
 
 const FULL: HomeResponse = {
   waiting: {
@@ -108,12 +108,14 @@ describe("Home", () => {
 
   it("greets by the real owner, time-aware, with no name hardcoded", () => {
     render(<Home home={FULL} error={null} onOpenReview={noop} onFilterAttention={noop} />);
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Good morning, Dhia.");
+    expect(screen.getByText("Good morning, Dhia.")).toBeTruthy();
+    // The topbar renders the page's h1; the greeting must not compete with it.
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
   });
 
   it("falls back to a plain greeting when the vault has no owner", () => {
     render(<Home home={EMPTY} error={null} onOpenReview={noop} onFilterAttention={noop} />);
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Good morning.");
+    expect(screen.getByText("Good morning.")).toBeTruthy();
   });
 
   it("spells out every number in the summary sentence, never a digit", () => {
@@ -125,10 +127,13 @@ describe("Home", () => {
     expect(summary.textContent).not.toMatch(/[0-9]/);
   });
 
-  it("keeps digits everywhere else: card badges and row numerals are not spelled out", () => {
+  it("keeps digits everywhere else: heading count chips show a digit, with the noun for screen readers", () => {
     render(<Home home={FULL} error={null} onOpenReview={noop} onFilterAttention={noop} />);
-    expect(screen.getByText("138 proposals")).toBeTruthy();
-    expect(screen.getByText("2 items")).toBeTruthy();
+    const chips = [...document.querySelectorAll(".count")];
+    expect(chips.map((c) => c.textContent)).toEqual(["138 proposals", "2 items", "3 pages"]);
+    // Only the digit is visible; the noun sits in an sr-only span.
+    expect(chips.map((c) => c.firstChild?.textContent)).toEqual(["138", "2", "3"]);
+    expect(chips.every((c) => c.querySelector(".sr-only"))).toBe(true);
   });
 
   it("groups Waiting for you rows by scope, largest first, and opens review on click", async () => {
@@ -194,6 +199,47 @@ describe("Home", () => {
     expect(screen.getByText("remember: claude-code")).toBeTruthy();
     expect(screen.queryByText("work/memory/claude-code/2026-09-18.md")).toBeNull();
     expect(screen.queryByRole("button", { name: /claude-code/ })).toBeNull();
+  });
+
+  it("groups repeated changes to one page into a single entry with an update count", () => {
+    const hoursAgo = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000).toISOString();
+    const repeated = (sha: string, when: string) => ({
+      sha,
+      path: "ai-studio/memory/claude-code/2026-09-24.md",
+      message: "remember: claude-code",
+      author_word: "you",
+      when,
+      scope: "ai-studio",
+      slug: "2026-09-24",
+      title: "claude-code 2026-09-24",
+    });
+    const home: HomeResponse = {
+      ...EMPTY,
+      changes: [
+        repeated("r1", hoursAgo(3)),
+        repeated("r2", hoursAgo(5)),
+        repeated("r3", hoursAgo(9)),
+        {
+          sha: "f1",
+          path: "ai-studio/decisions/x.md",
+          message: "feat: initial pages\n\nA long body that must never reach the screen.",
+          author_word: "an agent",
+          when: hoursAgo(30),
+        },
+      ],
+    };
+    render(<Home home={home} error={null} onOpenReview={noop} onFilterAttention={noop} />);
+
+    const entry = screen.getByRole("button", { name: "Open claude-code 2026-09-24" });
+    expect(entry.textContent).toContain("3 updates");
+    // The latest of the three commits sets the entry's time.
+    expect(entry.textContent).toContain("3 hours ago");
+    expect(screen.getAllByText("claude-code 2026-09-24")).toHaveLength(1);
+    // A commit with no resolved page shows only its subject line.
+    expect(screen.getByText("feat: initial pages")).toBeTruthy();
+    expect(screen.queryByText(/long body/)).toBeNull();
+    // The summary counts pages that changed, not commits.
+    expect(screen.getByText(/two pages have changed recently/i)).toBeTruthy();
   });
 
   it("says plainly when a card is empty instead of showing a zero", () => {

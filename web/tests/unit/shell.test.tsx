@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { AppShell } from "../../src/components/AppShell";
@@ -80,14 +80,30 @@ describe("AppShell", () => {
     expect(screen.queryByText(/not part of this release/i)).toBeNull();
   });
 
-  it("renders the command palette button as disabled", () => {
+  it("does not render a dead command palette placeholder", () => {
+    // The palette was a disabled "coming later" button that did nothing; it was removed
+    // rather than left as a control that looks usable and isn't.
     render(<AppShell />);
-    const palette = screen.getByRole("button", { name: /Search or jump to/ });
-    expect(palette.hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByRole("button", { name: /Search or jump to/ })).toBeNull();
   });
 
-  it("exposes a theme control", () => {
+  it("exposes a theme control with system, light and dark choices", async () => {
     render(<AppShell />);
-    expect(screen.getByRole("button", { name: /theme/i })).toBeTruthy();
+    const group = screen.getByRole("group", { name: /theme/i });
+    const dark = within(group).getByRole("button", { name: /dark/i });
+    await userEvent.click(dark);
+    expect(dark.getAttribute("aria-pressed")).toBe("true");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    await userEvent.click(within(group).getByRole("button", { name: /system/i }));
+    expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
+  });
+
+  it("names the current section in the document title", async () => {
+    render(<AppShell />);
+    // Earlier tests leave the URL on another section, so navigate explicitly first.
+    await userEvent.click(screen.getByRole("button", { name: /^Knowledge/ }));
+    expect(document.title).toBe("Knowledge · Balise");
+    await userEvent.click(screen.getByRole("button", { name: /^Review/ }));
+    expect(document.title).toBe("Review · Balise");
   });
 });

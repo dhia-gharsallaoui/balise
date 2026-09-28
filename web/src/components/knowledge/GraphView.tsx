@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchGraph } from "../../lib/api";
-import type { GraphResponse, PageRef } from "../../lib/types";
+import type { GraphEdge, GraphNode, GraphResponse, PageRef, TypeName } from "../../lib/types";
+import { plural } from "../../lib/plural";
 import { EmptyState } from "../ui/EmptyState";
 import { buildEgoGraph, type EgoGraph } from "./ego";
 import { GraphCanvas } from "./GraphCanvas";
@@ -90,11 +91,18 @@ export function GraphView({
     }
     return (
       <div className="graph-frame">
-        <p className="global-summary">
-          {global.totalNodes} pages · {global.totalEdges} relations · {global.scopeCount}{" "}
-          {global.scopeCount === 1 ? "scope" : "scopes"}
-          {global.isolatedCount > 0 ? ` · ${global.isolatedCount} isolated` : ""}
-        </p>
+        <div className="graph-meta">
+          <p className="global-summary">
+            <span>{plural(global.totalNodes, "page")}</span>
+            <span>{plural(global.totalEdges, "relation")}</span>
+            <span>{plural(global.scopeCount, "scope")}</span>
+            {global.isolatedCount > 0 ? <span>{global.isolatedCount} isolated</span> : null}
+          </p>
+          <GraphLegend
+            types={typesIn(global.scopes.flatMap((g) => g.nodes))}
+            roles={rolesIn(global.scopes.flatMap((g) => g.edges))}
+          />
+        </div>
         <GraphCanvas
           mode="global"
           elements={globalElements}
@@ -117,20 +125,28 @@ export function GraphView({
     );
   }
 
-  const roles = [...new Set(ego.edges.map((e) => e.kind))];
-
   return (
     <div className="graph-frame">
       <GraphControls depth={depth} onDepthChange={setDepth} directNeighbourCount={ego.directNeighbourCount} />
-      <GraphLegend
-        roles={roles}
-        nodeCount={ego.nodes.length}
-        edgeCount={ego.edges.length}
-        omittedCount={ego.omittedCount}
-      />
+      <div className="graph-meta">
+        <p className="graph-hint">
+          <span>{ego.nodes.length} shown</span>
+          <span>{plural(ego.edges.length, "relation")}</span>
+          {ego.omittedCount > 0 ? <span>{ego.omittedCount} more not shown</span> : null}
+        </p>
+        <GraphLegend types={typesIn(ego.nodes)} roles={rolesIn(ego.edges)} />
+      </div>
       <GraphCanvas mode="ego" elements={egoElements} nodeCount={ego.nodes.length} ego={ego} onOpen={onOpen} />
     </div>
   );
+}
+
+function typesIn(nodes: readonly GraphNode[]): TypeName[] {
+  return [...new Set(nodes.map((n) => n.type))].sort();
+}
+
+function rolesIn(edges: readonly GraphEdge[]): string[] {
+  return [...new Set(edges.map((e) => e.kind))].sort();
 }
 
 function messageOf(error: unknown): string {

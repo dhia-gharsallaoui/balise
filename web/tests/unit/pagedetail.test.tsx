@@ -101,4 +101,15 @@ describe("PageReader", () => {
     await userEvent.click(screen.getByRole("button", { name: /back to knowledge/i }));
     expect(onBack).toHaveBeenCalled();
   });
+
+  it("marks empty metadata as Not set rather than leaving a blank or a dash", () => {
+    render(<PageReader page={{ ...PAGE, owner: null, tags: [] }} onBack={vi.fn()} />);
+    expect(screen.getAllByText("Not set")).toHaveLength(2);
+  });
+
+  it("prints a claim's status only when it is not active", () => {
+    render(<PageReader page={PAGE} onBack={vi.fn()} />);
+    expect(screen.queryByText("active")).toBeNull();
+    expect(screen.getByText(/superseded Jun 2026/)).toBeTruthy();
+  });
 });

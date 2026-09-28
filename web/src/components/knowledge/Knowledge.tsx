@@ -1,3 +1,4 @@
+import { Funnel, MagnifyingGlass } from "@phosphor-icons/react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { fetchPage, fetchPages, search } from "../../lib/api";
 import type {
@@ -76,6 +77,9 @@ export function Knowledge({ tree, restrictTo, onClearRestrict }: KnowledgeProps)
   const [page, setPage] = useState<PageDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const breakpoint = useBreakpoint();
+  // Only meaningful at the narrow breakpoint, where the filters fold away behind a button so
+  // the page list is the first thing a phone shows. Desktop always shows the filter column.
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Writers split by whether the change is a navigation or an adjustment. Opening a page,
   // choosing a space and switching to the graph are things you expect the back button to
@@ -201,42 +205,67 @@ export function Knowledge({ tree, restrictTo, onClearRestrict }: KnowledgeProps)
     return <PageReader page={page} onBack={() => setOpen(null)} />;
   }
 
-  const cols = breakpoint === "narrow" ? 1 : 2;
+  const narrow = breakpoint === "narrow";
+  const cols = narrow ? 1 : 2;
+  const activeFilters = (space ? 1 : 0) + hiddenTypes.size + (showHistorical ? 1 : 0);
+
+  const filters = (
+    <SpaceTree
+      id="kn-filters-panel"
+      tree={tree.spaces}
+      types={tree.types}
+      historicalCount={tree.historical_count}
+      selectedSpace={space}
+      hiddenTypes={hiddenTypes}
+      showHistorical={showHistorical}
+      onSelectSpace={setSpace}
+      onToggleType={toggleType}
+      onToggleHistorical={() => setShowHistorical(!showHistorical)}
+      globalLint={tree.global_lint}
+    />
+  );
 
   return (
     <div className="kn-grid" data-cols={cols}>
-      <SpaceTree
-        tree={tree.spaces}
-        types={tree.types}
-        historicalCount={tree.historical_count}
-        selectedSpace={space}
-        hiddenTypes={hiddenTypes}
-        showHistorical={showHistorical}
-        onSelectSpace={setSpace}
-        onToggleType={toggleType}
-        onToggleHistorical={() => setShowHistorical(!showHistorical)}
-        globalLint={tree.global_lint}
-      />
+      {narrow ? null : filters}
 
       <div className="kn-main">
         {restrictTo ? (
           <div className="kn-filter-banner">
             <span>Filtered: {restrictTo.label}</span>
-            <button type="button" onClick={onClearRestrict}>
+            <button type="button" className="btn btn-quiet btn-sm" onClick={onClearRestrict}>
               Clear
             </button>
           </div>
         ) : null}
         <div className="kn-toolbar">
-          <input
-            className="kn-search"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search claims…"
-            aria-label="Search claims"
-          />
-          <div className="kn-viewmode" role="group" aria-label="View mode">
+          <div className="kn-search-wrap">
+            <MagnifyingGlass className="kn-search-icon" size={16} aria-hidden="true" />
+            <input
+              className="field kn-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search claims…"
+              aria-label="Search claims"
+            />
+          </div>
+          {narrow ? (
+            <button
+              type="button"
+              className="btn btn-secondary kn-filters-toggle"
+              aria-expanded={filtersOpen}
+              aria-controls={filtersOpen ? "kn-filters-panel" : undefined}
+              onClick={() => setFiltersOpen(!filtersOpen)}
+            >
+              <Funnel size={16} aria-hidden="true" />
+              Filters
+              {activeFilters > 0 ? (
+                <span className="count" aria-label={`${activeFilters} active`}>{activeFilters}</span>
+              ) : null}
+            </button>
+          ) : null}
+          <div className="segmented kn-viewmode" role="group" aria-label="View mode">
             {(["List", "Graph"] as ViewMode[]).map((mode) => (
               <button
                 key={mode}
@@ -249,6 +278,8 @@ export function Knowledge({ tree, restrictTo, onClearRestrict }: KnowledgeProps)
             ))}
           </div>
         </div>
+
+        {narrow && filtersOpen ? filters : null}
 
         {error ? (
           <EmptyState title="Could not reach the server." hint={`${error}. Is balise serve running?`} />

@@ -1,0 +1,145 @@
+/* web/src/styles/controls.css — the shared control vocabulary every screen draws from.
+
+   Buttons have exactly four ranks. A screen picks by intent, never by look:
+     .btn-primary    the one action a panel exists for (ink fill). At most one per panel.
+     .btn-secondary  any other action (hairline border on surface).
+     .btn-quiet      low-stakes, repeated or inline actions (text only, tints on hover).
+     .btn-danger     destroys or revokes something (issue-red text, red border on hover).
+   Size is orthogonal: add .btn-sm for dense rows. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  text-align: center;
+  text-decoration: none;
+  touch-action: manipulation;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { cursor: not-allowed; opacity: 0.45; }
+.btn svg { flex: none; }
+
+.btn-sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-action);
+}
+.btn-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 86%, var(--bg)); }
+
+.btn-secondary {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.btn-secondary:hover:not(:disabled) { border-color: var(--ink-3); background: var(--surface-2); }
+
+.btn-quiet {
+  color: var(--ink-2);
+  padding-inline: 8px;
+}
+.btn-quiet:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); }
+
+.btn-danger {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--issue-text);
+}
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--type-issue);
+  background: var(--issue-soft);
+}
+
+/* Text inputs, selects and textareas share one field look. */
+.field {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+.field:hover { border-color: var(--ink-3); }
+.field:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 14%, transparent);
+  border-radius: var(--radius-sm);
+}
+textarea.field { resize: vertical; line-height: 1.55; }
+
+/* Segmented control: a row of mutually exclusive buttons or radios. The selected segment is
+   a raised surface chip, the rest are quiet text. Mark the chosen one with aria-pressed,
+   aria-selected or aria-checked="true" (whichever the element's role calls for). */
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.segmented > * {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+.segmented > *:hover { color: var(--ink); }
+.segmented > [aria-pressed="true"],
+.segmented > [aria-selected="true"],
+.segmented > [aria-checked="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-card);
+}
+
+/* A small neutral count, e.g. next to a heading or nav item. */
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A panel is the one container shape: surface, hairline, 10px radius. Use it only where the
+   grouping carries meaning; plain spacing and a rule separate everything else. */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}

@@ -81,7 +81,28 @@ interface FcoseLayoutOptions {
 // kept small (vs. the old 48px) so the fitted view spends its space on content, not margin.
 const FIT_PADDING = 28;
 
-function buildLayoutOptions(): FcoseLayoutOptions {
+// The zoom/fit button stack is pinned inside the canvas's right edge (GraphCanvas.tsx), so
+// fit-to-content reserves a wider gutter on that side: content never lands under a button.
+const FIT_PADDING_RIGHT = 60;
+
+// Disc and label sizes no longer grow past zoom 1 (graphStyle.ts's noGrow and zoomCompensated),
+// so fitting a small vault zooms in only to *spread* it across the frame. The ceiling keeps a
+// two-node graph from being flung to opposite corners.
+const FIT_MAX_ZOOM = 2.5;
+
+// Below this many pages, on a frame wide enough to lay several labels side by side, the layout
+// reserves room for every node's (ellipsised, width-capped) label; see
+// nodeDimensionsIncludeLabels below. On a phone-width frame the same reservation spreads the
+// graph wider than the frame, fit then zooms out below HUB_ZOOM_THRESHOLD, and the user gets
+// small unlabelled dots, so a narrow frame keeps the compact layout.
+const LABEL_AWARE_LAYOUT_MAX_NODES = 40;
+const LABEL_AWARE_LAYOUT_MIN_WIDTH = 560;
+
+function wantsLabelAwareLayout(cy: Core): boolean {
+  return cy.nodes(".graph-node").length <= LABEL_AWARE_LAYOUT_MAX_NODES && cy.width() >= LABEL_AWARE_LAYOUT_MIN_WIDTH;
+}
+
+function buildLayoutOptions(labelAware: boolean): FcoseLayoutOptions {
   const reducedMotion = prefersReducedMotion();
   return {
     name: "fcose",
@@ -101,7 +122,13 @@ function buildLayoutOptions(): FcoseLayoutOptions {
     // accounts for every label's true footprint regardless of this flag, so nothing painted
     // ever ends up outside the viewport — this flag only controls how tightly nodes are
     // allowed to sit next to each other, not what's guaranteed visible.
-    nodeDimensionsIncludeLabels: false,
+    //
+    // A small graph is the exception. It fit-zooms *in*, which turns every label on, and with
+    // the layout blind to labels the isolated-node tile packed discs ~65 screen px apart under
+    // 150px labels, so the collision pass hid nearly all of them. Label widths are now capped
+    // (graphStyle.ts's LABEL_MAX_WIDTH_PX), so reserving them costs little at this size and
+    // buys a graph whose every title is readable at rest.
+    nodeDimensionsIncludeLabels: labelAware,
     tile: true,
     // Isolated (degree-0) nodes are tiled into one tidy block rather than scattered as
     // separate one-node components — tightened from fcose's own default (10/10) so that
@@ -207,11 +234,12 @@ function boxesOverlap(
 // label can land on top of some unrelated node's circle — both were observed live even after
 // the spacing tuning in buildLayoutOptions. Rather than trust a stochastic layout to always
 // keep every permanently-visible label clear — "usually fine" isn't "never overlapping" —
-// this walks every such label once positions settle and turns `labelAlways` back off for
-// whichever member of an overlapping pair matters less, in priority order (the ego centre and
-// depth<=1 neighbours first, then by degree). A suppressed label still appears on hover or
-// once zoomed past HUB_ZOOM_THRESHOLD: graphStyle.ts's cascade reads the *current* value of
-// the data flag, so flipping it at runtime here is enough. Scope titles and every node's own
+// this walks every painted label (hubs at rest, every node once zoomed past
+// HUB_ZOOM_THRESHOLD) after each fit and zoom, and sets `labelSuppressed` on whichever member
+// of an overlapping pair matters less, in priority order (the ego centre and depth<=1
+// neighbours first, then by degree). A suppressed label still appears on hover, or once
+// zooming in far enough makes room for it: graphStyle.ts's cascade reads the *current* value
+// of the data flag, so flipping it at runtime here is enough. Scope titles and every node's own
 // circle are never suppressed — reserved first, unconditionally — since an unlabelled cluster
 // or a label-less node is a smaller loss than text nobody can read.
 //
@@ -255,7 +283,9 @@ function computeFitBox(cy: Core): { x1: number; y1: number; x2: number; y2: numb
   const bodies = cy
     .elements()
     .boundingBox({ includeLabels: false, includeNodes: true, includeOverlays: false });
-  const visibleLabels = cy.elements(".graph-scope, .graph-node[?labelAlways]");
+  const visibleLabels = cy
+    .nodes(".graph-scope")
+    .union(cy.nodes(".graph-node").filter((el) => labelIsShown(el as NodeSingular)));
   if (visibleLabels.length === 0) return bodies;
   const labels = visibleLabels.boundingBox({
     includeLabels: true,
@@ -268,24 +298,36 @@ function computeFitBox(cy: Core): { x1: number; y1: number; x2: number; y2: numb
 // Replicates cy.fit()'s own zoom/pan arithmetic (zoom = min of width/height ratios against the
 // padded container; pan centres the box) but against computeFitBox's box instead of cy.fit()'s
 // default, label-inflated one — see computeFitBox's comment for why that substitution matters.
-function fitToBox(cy: Core, padding: number): void {
+// Returns null for a degenerate box (a single point, or a zero-size container mid-mount).
+function computeFitTarget(cy: Core): { zoom: number; pan: { x: number; y: number } } | null {
   const box = computeFitBox(cy);
   const w = cy.width();
   const h = cy.height();
   const boxWidth = box.x2 - box.x1;
   const boxHeight = box.y2 - box.y1;
-  if (!(boxWidth > 0) || !(boxHeight > 0) || !(w > 0) || !(h > 0)) {
-    // Degenerate box (e.g. a single point, or a zero-size container mid-mount) — fall back to
-    // Cytoscape's own fit rather than divide by zero.
-    cy.fit(cy.elements(), padding);
+  if (!(boxWidth > 0) || !(boxHeight > 0) || !(w > 0) || !(h > 0)) return null;
+  const innerWidth = w - FIT_PADDING - FIT_PADDING_RIGHT;
+  const innerHeight = h - 2 * FIT_PADDING;
+  const zoom = Math.min(FIT_MAX_ZOOM, innerWidth / boxWidth, innerHeight / boxHeight);
+  // Centre the box within the padded inner area (offset left by the wider right gutter).
+  return {
+    zoom,
+    pan: {
+      x: FIT_PADDING + innerWidth / 2 - (zoom * (box.x1 + box.x2)) / 2,
+      y: h / 2 - (zoom * (box.y1 + box.y2)) / 2,
+    },
+  };
+}
+
+function fitToBox(cy: Core): void {
+  const target = computeFitTarget(cy);
+  if (!target) {
+    // Fall back to Cytoscape's own fit rather than divide by zero.
+    cy.fit(cy.elements(), FIT_PADDING);
     return;
   }
-  const zoom = Math.min((w - 2 * padding) / boxWidth, (h - 2 * padding) / boxHeight);
-  cy.zoom(zoom);
-  cy.pan({
-    x: (w - zoom * (box.x1 + box.x2)) / 2,
-    y: (h - zoom * (box.y1 + box.y2)) / 2,
-  });
+  cy.zoom(target.zoom);
+  cy.pan(target.pan);
 }
 
 // graphStyle.ts's label font-size is a function of `cy.zoom()` (a hand-built floor, since
@@ -304,16 +346,47 @@ function fitToBox(cy: Core, padding: number): void {
 // this last pass can only tighten the view further, never re-introduce cropping.
 const FIT_SETTLE_PASSES = 2;
 
+// Scope boxes normally ignore label geometry (graphStyle.ts explains why), which lets a
+// visible label spill over the dashed edge. When the fit lands zoomed in (so every label is
+// painted) on a label-aware layout, the boxes are switched to wrap their labels and the fit
+// re-runs. Decided once per settle, from the label-blind fit, so the two sizings can't
+// alternate between passes.
 function settleFit(cy: Core): void {
-  for (let pass = 0; pass < FIT_SETTLE_PASSES; pass += 1) {
-    fitToBox(cy, FIT_PADDING);
-    cy.style().update();
+  const scopes = cy.nodes(".graph-scope");
+  scopes.removeClass("graph-scope-fit-labels");
+  settlePasses(cy);
+  if (wantsLabelAwareLayout(cy) && cy.zoom() >= HUB_ZOOM_THRESHOLD) {
+    scopes.addClass("graph-scope-fit-labels");
+    settlePasses(cy);
   }
+}
+
+function settlePasses(cy: Core): void {
+  for (let pass = 0; pass < FIT_SETTLE_PASSES; pass += 1) {
+    fitToBox(cy);
+    syncLabelState(cy);
+  }
+}
+
+// Whether the stylesheet cascade (graphStyle.ts) currently paints this node's label at rest.
+function labelIsShown(node: NodeSingular): boolean {
+  if (node.data("labelSuppressed")) return false;
+  return Boolean(node.data("labelAlways")) || node.hasClass("zoomed-in");
+}
+
+// Everything that depends on the current zoom: the `.zoomed-in` class, the zoom-compensated
+// font size and label width (Cytoscape doesn't re-evaluate function-valued styles on zoom by
+// itself), and which labels collide at that size.
+function syncLabelState(cy: Core): void {
+  cy.nodes(".graph-node").toggleClass("zoomed-in", cy.zoom() >= HUB_ZOOM_THRESHOLD);
+  cy.style().update();
   suppressOverlappingLabels(cy);
-  fitToBox(cy, FIT_PADDING);
 }
 
 function suppressOverlappingLabels(cy: Core): void {
+  // Start from a clean slate each time: zooming in shrinks every label's model-space box, so a
+  // label hidden at one zoom may fit at the next.
+  cy.nodes(".graph-node[?labelSuppressed]").data("labelSuppressed", false);
   const reserved: ReservedBox[] = [
     ...cy.nodes(".graph-scope").map((scope) => ({ id: scope.id(), box: labelBox(scope) })),
     ...cy.nodes(".graph-node").map((node) => ({ id: node.id(), box: nodeBodyBox(node) })),
@@ -326,16 +399,18 @@ function suppressOverlappingLabels(cy: Core): void {
     return depthBonus + (Number(node.data("degree")) || 0);
   };
 
+  // Every label the cascade would paint: hubs/centre at rest, every node once zoomed in.
   const hubs = cy
-    .nodes(".graph-node[?labelAlways]")
-    .sort((a, b) => priority(b) - priority(a) || (a.id() < b.id() ? -1 : 1));
+    .nodes(".graph-node")
+    .filter((el) => labelIsShown(el as NodeSingular))
+    .sort((a, b) => priority(b as NodeSingular) - priority(a as NodeSingular) || (a.id() < b.id() ? -1 : 1));
 
   hubs.forEach((node) => {
     const id = node.id();
     const box = labelBox(node);
     const collides = reserved.some((other) => other.id !== id && boxesOverlap(box, other.box));
     if (collides) {
-      node.data("labelAlways", false);
+      node.data("labelSuppressed", true);
       return;
     }
     reserved.push({ id, box });
@@ -368,7 +443,7 @@ export function useCytoscapeGraph(options: UseCytoscapeGraphOptions): UseCytosca
       // layout — fcose fetches whatever layoutUtilities instance is already configured on
       // this cy ("get", no options) rather than creating a default-options one of its own.
       configureComponentPacking(cy);
-      cy.layout(buildLayoutOptions() as unknown as cytoscape.LayoutOptions).run();
+      cy.layout(buildLayoutOptions(wantsLabelAwareLayout(cy)) as unknown as cytoscape.LayoutOptions).run();
     } catch {
       // No 2D canvas context (jsdom in unit tests) or another mounting failure — the
       // accessible list is still fully functional, so this is a degradation, not a crash.
@@ -407,18 +482,19 @@ export function useCytoscapeGraph(options: UseCytoscapeGraphOptions): UseCytosca
       cy.nodes(".graph-node").removeClass("graph-node-dim graph-node-hover");
       cy.edges(".graph-edge").removeClass("graph-edge-dim graph-edge-hover");
     });
-    const syncZoomClass = () => {
-      if (!cy) return;
-      cy.nodes(".graph-node").toggleClass("zoomed-in", cy.zoom() >= HUB_ZOOM_THRESHOLD);
-      // Label font-size is zoom-dependent (graphStyle.ts's zoomCompensatedFontSize) so that
-      // its on-screen size stays constant instead of shrinking — or vanishing outright, per
-      // min-zoomed-font-size's real hide-below-threshold behaviour — as zoom drops. Cytoscape
-      // does not re-invoke function-valued styles on every zoom/pan tick on its own, so this
-      // forces the recompute on every wheel-zoom, pinch, drag-pan, or button click.
-      cy.style().update();
+    // Label font-size and width are zoom-dependent (graphStyle.ts's zoomCompensated*) so their
+    // on-screen size stays constant as zoom changes, and which labels collide changes with it.
+    // Panning changes neither, so only zoom re-syncs, coalesced to one pass per frame.
+    let syncFrame = 0;
+    const scheduleLabelSync = () => {
+      if (syncFrame) return;
+      syncFrame = requestAnimationFrame(() => {
+        syncFrame = 0;
+        if (cy) syncLabelState(cy);
+      });
     };
-    cy.on("zoom pan", syncZoomClass);
-    syncZoomClass();
+    cy.on("zoom", scheduleLabelSync);
+    syncLabelState(cy);
     // fcose's own `fit: true` runs once the layout (and, unless reduced-motion, its 400ms
     // settle animation) finishes, but compound (scope) box geometry can still be settling
     // relative to when fcose computed that internal fit — so `layoutstop` re-fits explicitly,
@@ -445,6 +521,7 @@ export function useCytoscapeGraph(options: UseCytoscapeGraphOptions): UseCytosca
     wheelGuard?.addEventListener("wheel", onWheel, { capture: true, passive: true });
 
     return () => {
+      if (syncFrame) cancelAnimationFrame(syncFrame);
       resizeObserver?.disconnect();
       wheelGuard?.removeEventListener("wheel", onWheel, { capture: true });
       cy?.destroy();
@@ -485,18 +562,9 @@ export function useCytoscapeGraph(options: UseCytoscapeGraphOptions): UseCytosca
       // `complete` runs settleFit once the animation lands, repeating fitToBox + style().update()
       // (and re-running suppressOverlappingLabels) to converge on a self-consistent,
       // guaranteed-uncropped result exactly as layoutstop does after a re-layout.
-      const box = computeFitBox(cy);
-      const w = cy.width();
-      const h = cy.height();
-      const boxWidth = box.x2 - box.x1;
-      const boxHeight = box.y2 - box.y1;
-      const canComputeTarget = boxWidth > 0 && boxHeight > 0 && w > 0 && h > 0;
-      const zoom = canComputeTarget
-        ? Math.min((w - 2 * FIT_PADDING) / boxWidth, (h - 2 * FIT_PADDING) / boxHeight)
-        : cy.zoom();
-      const pan = canComputeTarget
-        ? { x: (w - zoom * (box.x1 + box.x2)) / 2, y: (h - zoom * (box.y1 + box.y2)) / 2 }
-        : cy.pan();
+      const target = computeFitTarget(cy);
+      const zoom = target ? target.zoom : cy.zoom();
+      const pan = target ? target.pan : cy.pan();
       cy.animate({
         zoom,
         pan,

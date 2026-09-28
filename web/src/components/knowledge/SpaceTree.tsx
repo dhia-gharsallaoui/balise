@@ -14,6 +14,9 @@ export interface SpaceTreeProps {
   // list and no page to open — without a home here it is simply absent from the screen with
   // nothing saying why. Optional, and rendered only when non-empty.
   globalLint?: Finding[];
+  // Lets Knowledge render this as the collapsible panel behind the narrow-width "Filters"
+  // button (aria-controls needs an id to point at). Optional: the desktop column needs neither.
+  id?: string;
 }
 
 export function SpaceTree({
@@ -27,9 +30,10 @@ export function SpaceTree({
   onToggleType,
   onToggleHistorical,
   globalLint,
+  id,
 }: SpaceTreeProps) {
   return (
-    <aside className="kn-left">
+    <aside className="kn-left" id={id} aria-label="Filters">
       <div className="kn-spaces">
         <div className="kn-section-title">Spaces</div>
         <button
@@ -61,6 +65,7 @@ export function SpaceTree({
               onChange={() => onToggleType(t.name)}
               aria-label={t.name}
             />
+            <span className="type-dot" data-type={t.name} aria-hidden="true" />
             <span className="kn-filter-name">{t.name}</span>
             <span className="kn-filter-count">{t.count}</span>
           </label>
@@ -73,6 +78,7 @@ export function SpaceTree({
             onChange={onToggleHistorical}
             aria-label="Show historical"
           />
+          <span className="type-dot type-dot-blank" aria-hidden="true" />
           <span className="kn-filter-name">Historical</span>
           <span className="kn-filter-count">{historicalCount}</span>
         </label>

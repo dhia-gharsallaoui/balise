@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Check, Copy, Plus } from "@phosphor-icons/react";
 import {
   ApiError, createAgent, fetchAgentActivity, fetchAgents, fetchSettings, revokeAgent,
 } from "../../lib/api";
 import type { AgentActivityRow, AgentState, AgentSummary } from "../../lib/types";
 import { EmptyState } from "../ui/EmptyState";
+import { plural } from "../../lib/plural";
 import "../../styles/agents.css";
 
 // The Agents screen (02-ui-design-v1.md section 5.5; layout and tab structure from
@@ -60,11 +62,7 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-function plural(count: number, unit: string): string {
-  return `${count} ${unit}${count === 1 ? "" : "s"}`;
-}
-
-function initial(name: string): string {
+function monogram(name: string): string {
   const trimmed = name.trim();
   return trimmed ? trimmed[0].toUpperCase() : "?";
 }
@@ -152,12 +150,47 @@ function resultNote(row: AgentActivityRow): string | null {
   return null;
 }
 
+// Every state is a 7px dot plus the word in ink-2: the hue marks the state, the word names it,
+// and neither relies on coloured text (several state hues fail contrast as text).
 function StateBadge({ state }: { state: AgentState }) {
-  if (state === "active") {
-    return <span className="agents-state agents-state-active">active</span>;
-  }
+  return <span className={`agents-state agents-state-${state}`}>{state}</span>;
+}
+
+// Activity can run to hundreds of rows; the first screenful answers "what did it just do",
+// so the rest waits behind one quiet button rather than pushing the Danger footer off-screen.
+const ACTIVITY_PREVIEW = 8;
+
+function ActivityList({ rows }: { rows: AgentActivityRow[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? rows : rows.slice(0, ACTIVITY_PREVIEW);
+  const hidden = rows.length - visible.length;
   return (
-    <span className={`agents-state-badge agents-state-badge-${state}`}>{state}</span>
+    <>
+      <ul className="agents-activity-list">
+        {visible.map((row) => (
+          <li key={row.id} className="agents-activity-row">
+            <span className="agents-activity-when">{relativeTime(row.when)}</span>
+            <div className="agents-activity-body">
+              <div className="agents-activity-query">
+                {toolVerb(row.tool)}: {row.query}
+              </div>
+              {resultNote(row) ? (
+                <div className="agents-activity-note">{resultNote(row)}</div>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 ? (
+        <button
+          type="button"
+          className="btn btn-quiet btn-sm agents-activity-more"
+          onClick={() => setShowAll(true)}
+        >
+          Show {plural(hidden, "older entry")}
+        </button>
+      ) : null}
+    </>
   );
 }
 
@@ -364,7 +397,7 @@ export function AgentsScreen({ allScopes = [] }: AgentsScreenProps) {
       setCopyError(null);
     } catch {
       setCopied(false);
-      setCopyError("Could not copy automatically — select and copy the text above by hand.");
+      setCopyError("Could not copy automatically. Select the key above and copy it by hand.");
     }
   }
 
@@ -389,16 +422,17 @@ export function AgentsScreen({ allScopes = [] }: AgentsScreenProps) {
 
   return (
     <div className="agents-screen">
-      <section className="agents-list-card" aria-labelledby="agents-list-heading">
+      <section className="agents-list-card panel" aria-labelledby="agents-list-heading">
         <div className="agents-list-head">
           <h2 id="agents-list-heading">Agents</h2>
-          <span className="agents-list-count">{agents.length}</span>
+          <span className="count">{agents.length}</span>
           <button
             type="button"
-            className="agents-add-toggle"
+            className="btn btn-secondary btn-sm agents-add-toggle"
             aria-expanded={showAddForm}
             onClick={() => (showAddForm ? closeAddForm() : openAddForm())}
           >
+            {showAddForm ? null : <Plus size={14} aria-hidden="true" />}
             {showAddForm ? "Cancel" : "Add agent"}
           </button>
         </div>
@@ -409,10 +443,12 @@ export function AgentsScreen({ allScopes = [] }: AgentsScreenProps) {
               <label htmlFor="agents-add-name">Name</label>
               <input
                 id="agents-add-name"
+                className="field"
                 type="text"
                 value={addName}
                 onChange={(e) => setAddName(e.target.value)}
                 maxLength={100}
+                placeholder="claude-code…"
               />
             </div>
 
@@ -426,12 +462,12 @@ export function AgentsScreen({ allScopes = [] }: AgentsScreenProps) {
                 <p className="agents-empty-note">Loading spaces…</p>
               ) : availableScopes.length === 0 ? (
                 <p className="agents-empty-note">
-                  No spaces exist yet — add one from Settings first.
+                  No spaces exist yet. Add one from Settings first.
                 </p>
               ) : (
                 <div className="agents-checkbox-group">
                   {availableScopes.map((scope) => (
-                    <label key={scope} className="agents-checkbox">
+                    <label key={scope} className="agents-checkbox agents-checkbox-mono">
                       <input
                         type="checkbox"
                         checked={addScopes.includes(scope)}
@@ -464,6 +500,7 @@ export function AgentsScreen({ allScopes = [] }: AgentsScreenProps) {
               <label htmlFor="agents-add-expiry">Expires on (optional)</label>
               <input
                 id="agents-add-expiry"
+                className="field agents-date"
                 type="date"
                 value={addExpiry}
                 onChange={(e) => setAddExpiry(e.target.value)}
@@ -477,10 +514,10 @@ export function AgentsScreen({ allScopes = [] }: AgentsScreenProps) {
             ) : null}
 
             <div className="agents-form-actions">
-              <button type="submit" className="agents-form-submit" disabled={addBusy}>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={addBusy}>
                 {addBusy ? "Adding…" : "Add agent"}
               </button>
-              <button type="button" className="agents-form-cancel" onClick={closeAddForm}>
+              <button type="button" className="btn btn-quiet btn-sm" onClick={closeAddForm}>
                 Cancel
               </button>
             </div>
@@ -490,16 +527,27 @@ export function AgentsScreen({ allScopes = [] }: AgentsScreenProps) {
         {createdToken ? (
           <div className="agents-token-panel">
             <p className="agents-token-warning" role="alert">
-              This is the only time {createdToken.name}&rsquo;s access key is shown. Copy it now
-              — it cannot be displayed again.
+              This is the only time {createdToken.name}&rsquo;s access key is shown. Copy it now,
+              it cannot be displayed again.
             </p>
-            <code className="agents-token-value">{createdToken.token}</code>
-            {copyError ? <p className="agents-form-error">{copyError}</p> : null}
-            <div className="agents-token-actions">
-              <button type="button" className="agents-token-copy" onClick={handleCopyToken}>
+            <div className="agents-token-block">
+              <code className="agents-token-value">{createdToken.token}</code>
+              <button
+                type="button"
+                className="btn btn-quiet btn-sm agents-token-copy"
+                onClick={handleCopyToken}
+              >
+                {copied ? (
+                  <Check size={14} aria-hidden="true" />
+                ) : (
+                  <Copy size={14} aria-hidden="true" />
+                )}
                 {copied ? "Copied" : "Copy"}
               </button>
-              <button type="button" className="agents-token-done" onClick={handleDismissToken}>
+            </div>
+            {copyError ? <p className="agents-form-error">{copyError}</p> : null}
+            <div className="agents-token-actions">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={handleDismissToken}>
                 Done
               </button>
             </div>
@@ -507,7 +555,7 @@ export function AgentsScreen({ allScopes = [] }: AgentsScreenProps) {
         ) : null}
 
         {agents.length === 0 ? (
-          <p className="agents-empty-note">
+          <p className="agents-empty-note agents-list-empty">
             No agents have been given access to this vault yet. Add one above to get started.
           </p>
         ) : (
@@ -521,7 +569,7 @@ export function AgentsScreen({ allScopes = [] }: AgentsScreenProps) {
                   aria-current={agent.id === effectiveId}
                 >
                   <span className="agents-avatar" aria-hidden="true">
-                    {initial(agent.name)}
+                    {monogram(agent.name)}
                   </span>
                   <span className="agents-row-body">
                     <span className="agents-row-name">{agent.name}</span>
@@ -542,63 +590,25 @@ export function AgentsScreen({ allScopes = [] }: AgentsScreenProps) {
         </p>
       </section>
 
-      <section className="agents-detail-card" aria-labelledby="agents-detail-heading">
+      <section className="agents-detail-card panel" aria-labelledby="agents-detail-heading">
         {selected ? (
           <>
             <div className="agents-detail-head">
-              <h2 id="agents-detail-heading" className="agents-detail-name">
-                {selected.name}
-              </h2>
-              <StateBadge state={selected.state} />
+              <div className="agents-detail-title">
+                <h2 id="agents-detail-heading" className="agents-detail-name">
+                  {selected.name}
+                </h2>
+                <StateBadge state={selected.state} />
+              </div>
               <p className="agents-boundary">{boundarySentence(selected, allScopes)}</p>
-
-              {selected.state !== "revoked" ? (
-                revokeConfirming ? (
-                  <div className="agents-revoke-panel">
-                    <p>
-                      Revoke {selected.name}? It will stop reading anything immediately. Its
-                      history stays, but this cannot be undone.
-                    </p>
-                    {revokeError ? (
-                      <p className="agents-action-error" role="alert">
-                        {revokeError}
-                      </p>
-                    ) : null}
-                    <div className="agents-revoke-actions">
-                      <button
-                        type="button"
-                        className="agents-revoke-confirm"
-                        onClick={handleConfirmRevoke}
-                        disabled={revokeBusy}
-                      >
-                        {revokeBusy ? "Revoking…" : "Yes, revoke it"}
-                      </button>
-                      <button
-                        type="button"
-                        className="agents-revoke-cancel"
-                        onClick={() => setRevokeConfirming(false)}
-                        disabled={revokeBusy}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="agents-revoke-button"
-                    onClick={() => setRevokeConfirming(true)}
-                  >
-                    Revoke
-                  </button>
-                )
-              ) : null}
             </div>
 
             <div className="agents-tabs" role="tablist" aria-label="Agent details">
               <button
                 type="button"
                 role="tab"
+                id="agents-tab-activity"
+                aria-controls="agents-panel-activity"
                 aria-selected={tab === "activity"}
                 className={`agents-tab${tab === "activity" ? " is-active" : ""}`}
                 onClick={() => setTab("activity")}
@@ -627,7 +637,12 @@ export function AgentsScreen({ allScopes = [] }: AgentsScreenProps) {
               </button>
             </div>
 
-            <div className="agents-tab-panel">
+            <div
+              className="agents-tab-panel"
+              role="tabpanel"
+              id="agents-panel-activity"
+              aria-labelledby="agents-tab-activity"
+            >
               {activityError ? (
                 <p className="agents-empty-note">{activityError}</p>
               ) : !activity ? (
@@ -635,26 +650,65 @@ export function AgentsScreen({ allScopes = [] }: AgentsScreenProps) {
               ) : activity.length === 0 ? (
                 <p className="agents-empty-note">This agent has not looked up anything yet.</p>
               ) : (
-                <ul className="agents-activity-list">
-                  {activity.map((row) => (
-                    <li key={row.id} className="agents-activity-row">
-                      <span className="agents-activity-when">{relativeTime(row.when)}</span>
-                      <div className="agents-activity-body">
-                        <div className="agents-activity-query">
-                          {toolVerb(row.tool)}: {row.query}
-                        </div>
-                        {resultNote(row) ? (
-                          <div className="agents-activity-note">{resultNote(row)}</div>
-                        ) : null}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                <ActivityList key={selected.id} rows={activity} />
               )}
             </div>
+
+            {selected.state !== "revoked" ? (
+              <div className="agents-danger" aria-labelledby="agents-danger-heading" role="group">
+                <div className="agents-danger-text">
+                  <h3 id="agents-danger-heading">Revoke access</h3>
+                  <p>
+                    Stops {selected.name} reading anything. To change what it can read, revoke it
+                    and add a new agent.
+                  </p>
+                </div>
+                {revokeConfirming ? (
+                  <div className="agents-revoke-panel">
+                    <p>
+                      Revoke {selected.name}? It will stop reading anything immediately. Its
+                      history stays, but this cannot be undone.
+                    </p>
+                    {revokeError ? (
+                      <p className="agents-form-error" role="alert">
+                        {revokeError}
+                      </p>
+                    ) : null}
+                    <div className="agents-revoke-actions">
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        onClick={handleConfirmRevoke}
+                        disabled={revokeBusy}
+                      >
+                        {revokeBusy ? "Revoking…" : "Yes, revoke it"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-quiet btn-sm"
+                        onClick={() => setRevokeConfirming(false)}
+                        disabled={revokeBusy}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm agents-revoke-button"
+                    onClick={() => setRevokeConfirming(true)}
+                  >
+                    Revoke
+                  </button>
+                )}
+              </div>
+            ) : null}
           </>
         ) : (
-          <p className="agents-empty-note">Select an agent to see what it can read.</p>
+          <p className="agents-empty-note agents-detail-empty">
+            Select an agent to see what it can read.
+          </p>
         )}
       </section>
     </div>
