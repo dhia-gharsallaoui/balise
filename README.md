@@ -14,7 +14,7 @@ Your notes are markdown files in a git repo. Balise indexes them into Postgres, 
 AI agents over MCP with per-agent scoping, and gives you a web UI to review what the agents want
 to change — before anything is written.
 
-<img src="docs/media/tour.gif" alt="Searching claims for 'failover', opening the matching page in the reader, then switching to the relation graph" width="800">
+<img src="docs/media/tour.gif" alt="Asking 'cannot log in after group change' in plain words, opening the top matching page in the reader, then switching to the relation graph and zooming" width="800">
 
 </div>
 
@@ -69,12 +69,12 @@ byte for byte.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/media/home.png" alt="The Home screen: a greeting, four claim proposals waiting for a decision grouped by space, two lint findings needing attention, and a list of recently changed pages"></td>
-<td width="50%"><img src="docs/media/knowledge.png" alt="The Knowledge screen: a space tree with per-space page counts on the left and claim-level search results grouped by page type"></td>
+<td width="50%"><img src="docs/media/home.png" alt="The Home screen: a greeting and one-line summary, four claim proposals waiting for a decision grouped by scope, one lint finding needing attention, and a timeline of recently changed pages"></td>
+<td width="50%"><img src="docs/media/knowledge.png" alt="The Knowledge screen: a space tree with per-space page counts on the left and pages grouped by type, each row marked with its type colour"></td>
 </tr>
 <tr>
-<td><img src="docs/media/graph.png" alt="The relation graph: one panel per scope, each laid out as a radial spanning tree, with pages having no relations shelved separately below"></td>
-<td><img src="docs/media/reader.png" alt="A page open in the full-width reading view, with its claims listed above the body text and its metadata and backlinks below"></td>
+<td><img src="docs/media/graph.png" alt="The relation graph: one dashed box per scope holding its pages as nodes coloured by type, relations as edges, and a legend of types and relation kinds above"></td>
+<td><img src="docs/media/reader.png" alt="A page open in the reading view: numbered claims above the body text, relations and backlinks below it, and owner, scope and tags in a side column"></td>
 </tr>
 </table>
 

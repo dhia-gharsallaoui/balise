@@ -252,7 +252,7 @@ async function main() {
   for (const theme of ["light", "dark"]) {
     const s = theme === "light" ? "" : "-dark";
     await shot(browser, session, { name: `home${s}`, theme, go: async (p) => {
-      await p.goto(`${BASE}/home`); await p.locator(".home-card").first().waitFor(); await pause(p, 900);
+      await p.goto(`${BASE}/home`); await p.locator(".home-grid").first().waitFor(); await pause(p, 900);
     }});
     await shot(browser, session, { name: `knowledge${s}`, theme, go: async (p) => {
       await p.goto(`${BASE}/knowledge`); await ready(p); await pause(p, 600);
@@ -317,6 +317,11 @@ async function main() {
   // someone accepts it, and that is the whole point.
   await gif(browser, session, { name: "review", go: async (p, rec) => {
     await rec.navigate(`${BASE}/review`);
+    await pause(p, 1200);
+    // Re-selecting the already-open proposal changes nothing on screen, but it is an event,
+    // and screencli trims any stretch with no events as idle. Without it the whole "read the
+    // proposal" beat before Accept was cut, and the clip opened on the queue already advanced.
+    await rec.click(p.locator(".review-queue-row").first(), "Read the proposal");
     await pause(p, 2600);
     const accept = p.getByRole("button", { name: /^Accept/ }).first();
     if (await accept.count()) {
