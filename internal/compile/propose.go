@@ -31,6 +31,12 @@ const (
 // hyphens), the shape vault.SlugFromFilename reads back.
 var slugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
+// ValidSlug reports whether slug is a usable new page slug: the vault's kebab-case filename
+// convention, at most 80 characters. Shared by propose_pages and the MCP propose tool.
+func ValidSlug(slug string) bool {
+	return slugPattern.MatchString(slug) && len(slug) <= 80
+}
+
 // Note is one remembered entry awaiting placement. Key identifies it across runs (see
 // NoteKey) so a note is only ever proposed once.
 type Note struct {
@@ -226,7 +232,7 @@ func validatePlacement(p Placement, in PlacementInput) (problems, warnings []str
 			problems = append(problems, fmt.Sprintf("new page slug %q is used twice", np.Slug))
 		case !types[np.Type]:
 			problems = append(problems, fmt.Sprintf("new page %q has type %q, which is not one of the listed types", np.Slug, np.Type))
-		case !slugPattern.MatchString(np.Slug) || len(np.Slug) > 80:
+		case !ValidSlug(np.Slug):
 			problems = append(problems, fmt.Sprintf("new page slug %q must be lowercase words joined by hyphens, at most 80 characters", np.Slug))
 		case in.TakenSlugs[np.Slug]:
 			problems = append(problems, fmt.Sprintf("new page slug %q is already taken; choose another", np.Slug))

@@ -174,3 +174,15 @@ func pendingProposalGroups(pages store.PageStore) (map[string][]pendingProposal,
 	}
 	return out, nil
 }
+
+// PendingProposalID returns the id of the pending proposal already targeting scope/target, if
+// any. A second pending proposal on one page is the hazard this file exists to prevent, so any
+// writer of new proposals (propose_pages, the MCP propose tool) checks this first.
+func PendingProposalID(pages store.PageStore, scope, target string) (string, bool, error) {
+	byTarget, err := pendingProposalsByTarget(pages)
+	if err != nil {
+		return "", false, err
+	}
+	p, ok := byTarget[targetKey(scope, target)]
+	return p.Proposal.ID, ok, nil
+}

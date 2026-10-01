@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -677,35 +676,5 @@ func agentAuthor(createdBy string) string {
 // handleReviewAccept compares against a proposal's recorded TargetVersion (fix 1, part B) —
 // callers that only need a read-only preview (handleReviewItem) are free to ignore it.
 func findPageBySlug(pages store.PageStore, scope, slug string) (string, vault.Page, string, error) {
-	paths, err := pages.List(scope + "/")
-	if err != nil {
-		return "", vault.Page{}, "", fmt.Errorf("list %s: %w", scope, err)
-	}
-	for _, p := range paths {
-		if !isRealPage(p) {
-			continue
-		}
-		raw, version, err := pages.Read(p)
-		if err != nil {
-			return "", vault.Page{}, "", fmt.Errorf("read %s: %w", p, err)
-		}
-		page, err := vault.Parse(string(raw))
-		if err != nil {
-			continue // malformed page: not a candidate match, not a fatal error either
-		}
-		var fm struct {
-			Slug string `yaml:"slug"`
-		}
-		if err := page.Decode(&fm); err != nil {
-			continue
-		}
-		candidate := fm.Slug
-		if candidate == "" {
-			candidate = vault.SlugFromFilename(path.Base(p))
-		}
-		if candidate == slug {
-			return p, page, version, nil
-		}
-	}
-	return "", vault.Page{}, "", fmt.Errorf("no page with slug %q in scope %q", slug, scope)
+	return compile.FindPageBySlug(pages, scope, slug)
 }

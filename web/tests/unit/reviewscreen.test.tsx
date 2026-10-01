@@ -298,4 +298,22 @@ describe("ReviewScreen", () => {
     await userEvent.click(screen.getByRole("button", { name: /Open client-engram\/memory/ }));
     expect(onOpenPage).toHaveBeenCalledWith("client-engram", "2026-10-01", "2026-10-01");
   });
+
+  it("credits an agent's evidence to the agent instead of offering a page to open", async () => {
+    const agentDetail: ReviewDetail = {
+      ...DETAIL_1,
+      created_by: "dapple-controlplane:2026-10-01T09:00:00Z",
+      evidence: [{ source: "agent:dapple-controlplane", text: "Ran apply; both connections stayed up." }],
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/review")) return jsonResponse({ proposals: [LIST.proposals[0]] });
+      if (url.includes("/api/review/p-1")) return jsonResponse(agentDetail);
+      throw new Error(`unexpected fetch: ${url}`);
+    }));
+    render(<ReviewScreen onOpenPage={vi.fn()} />);
+    expect(await screen.findByText("Ran apply; both connections stayed up.")).toBeTruthy();
+    expect(screen.getByText("Reported by dapple-controlplane")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Open agent:/ })).toBeNull();
+  });
 });

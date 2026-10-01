@@ -7,7 +7,7 @@
 [![Go 1.26](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![Postgres 15](https://img.shields.io/badge/Postgres-15-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
-[![MCP](https://img.shields.io/badge/MCP-6%20tools-6E56CF)](https://modelcontextprotocol.io)
+[![MCP](https://img.shields.io/badge/MCP-7%20tools-6E56CF)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 Your notes are markdown files in a git repo. Balise indexes them into Postgres, serves them to
@@ -123,7 +123,7 @@ Eight types ship by default — `state`, `decision`, `gotcha`, `procedure`, `iss
 Mint a token scoped to exactly what that agent should see:
 
 ```bash
-./bin/balise token create my-assistant --scopes work,client-acme --capabilities read,remember
+./bin/balise token create my-assistant --scopes work,client-acme --capabilities read,remember,propose
 ```
 
 The token is printed once. Point Claude Code at it over stdio:
@@ -150,7 +150,8 @@ in shell history.
 | `pages` | Lists pages by type, with optional scope, tags, status. |
 | `fetch` | One page with its claims, by scope and slug. |
 | `related` | Relations for a page, grouped by role, depth-clamped. |
-| `remember` | Appends to the agent's own memory file. Needs the `remember` capability. |
+| `remember` | Appends to the agent's own memory file, searchable after the next reindex. Needs the `remember` capability. |
+| `propose` | Proposes claims for an existing page, or a new page, into the Review queue. Needs the `propose` capability. Nothing changes until a human accepts it. |
 
 Every call writes one audit row — **including refusals**. The Agents screen shows which spaces
 each agent may read, what it actually did, and distinguishes a refused read from a successful one.
@@ -161,8 +162,10 @@ Connecting the server is half of it. An agent with these tools available will re
 ask it to and otherwise ignore them — so the vault only ever grows when *you* feed it.
 
 [`skill/SKILL.md`](skill/SKILL.md) closes that loop. It gives the agent two habits: call
-`context` before answering anything about these systems, and offer to `remember` whatever it
-establishes that is durable and not already recorded. It also tells it what is *not* worth
+`context` before answering anything about these systems, and offer to record whatever it
+establishes that is durable and not already there: `propose` it when it is verified and the
+agent knows which page it belongs on, `remember` it otherwise. `balise compile propose-pages`
+later files remembered notes into proposals too, so either way a human reviews it. It also tells it what is *not* worth
 writing — anything already there, anything true for ten minutes, anything it inferred but did
 not verify — and that a client's detail belongs in that client's scope and nowhere else.
 
@@ -175,9 +178,9 @@ It is one plain markdown file with YAML frontmatter, which is the format Claude 
 and OpenCode all read — nothing in it is specific to one host. See
 [`skill/README.md`](skill/README.md) for per-host paths and what is worth tuning.
 
-**Mint the token with `remember`, not just `read`.** An agent following this skill with a
-read-only token will be refused every time it tries to record something, which looks like
-the skill misbehaving and is really the token being too narrow.
+**Mint the token with `remember` and `propose`, not just `read`.** An agent following this
+skill with a read-only token will be refused every time it tries to record something, which
+looks like the skill misbehaving and is really the token being too narrow.
 
 ## Architecture
 

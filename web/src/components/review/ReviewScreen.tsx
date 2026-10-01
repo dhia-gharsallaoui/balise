@@ -193,21 +193,25 @@ function EvidenceList({ detail, onOpenPage }: EvidenceProps) {
         {detail.evidence.map((ev, idx) => (
           <li key={idx}>
             <blockquote>{ev.text}</blockquote>
-            <button
-              type="button"
-              className="btn btn-quiet btn-sm review-open-page"
-              onClick={() => {
-                const cited = citedPage(ev.source);
-                if (ev.source === detail.target || cited.slug === detail.target) {
-                  onOpenPage(detail.scope, detail.target, detail.target_title);
-                } else {
-                  onOpenPage(cited.scope, cited.slug, cited.slug);
-                }
-              }}
-            >
-              Open {ev.source}
-              <ArrowSquareOut size={14} weight="regular" aria-hidden="true" />
-            </button>
+            {ev.source.startsWith("agent:") ? (
+              <p className="review-evidence-by">Reported by {ev.source.slice("agent:".length)}</p>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-quiet btn-sm review-open-page"
+                onClick={() => {
+                  const cited = citedPage(ev.source);
+                  if (ev.source === detail.target || cited.slug === detail.target) {
+                    onOpenPage(detail.scope, detail.target, detail.target_title);
+                  } else {
+                    onOpenPage(cited.scope, cited.slug, cited.slug);
+                  }
+                }}
+              >
+                Open {ev.source}
+                <ArrowSquareOut size={14} weight="regular" aria-hidden="true" />
+              </button>
+            )}
           </li>
         ))}
       </ul>

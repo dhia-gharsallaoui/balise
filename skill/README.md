@@ -32,7 +32,7 @@ The skill describes tools; it does not provide them. Connect the vault first, or
 will be told to call `context` and find nothing to call:
 
 ```bash
-balise token create my-assistant --scopes work --capabilities read,remember
+balise token create my-assistant --scopes work --capabilities read,remember,propose
 ```
 
 ```json
@@ -47,9 +47,9 @@ balise token create my-assistant --scopes work --capabilities read,remember
 }
 ```
 
-**The `remember` capability is what makes the writing half work.** A token minted with only
-`read` will follow the skill's reading habits and be refused every time it tries to record
-anything — which looks like the skill misbehaving and is really the token being too narrow.
+**The `remember` and `propose` capabilities are what make the writing half work.** A token
+minted with only `read` will follow the skill's reading habits and be refused every time it
+tries to record anything — which looks like the skill misbehaving and is really the token being too narrow.
 
 Scopes are the other half. An agent can only write where it can read, so a token scoped to
 `work` cannot file anything under a client scope, by design.

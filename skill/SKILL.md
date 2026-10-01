@@ -1,6 +1,6 @@
 ---
 name: balise
-description: Use BEFORE answering any question about how this project or its systems are designed, built, configured, deployed, operated or paid for — architecture, tooling, infrastructure, pipelines, models, data, limits, cost, or any choice already made. A Balise vault is connected over MCP and may hold a recorded decision that overrides the general best-practice answer. Also use when you establish something durable worth recording.
+description: Use BEFORE answering any question about how this project or its systems are designed, built, configured, deployed, operated or paid for — architecture, tooling, infrastructure, pipelines, models, data, limits, cost, or any choice already made. A Balise vault is connected over MCP and may hold a recorded decision that overrides the general best-practice answer. Also use when you establish something durable worth recording (propose it, or remember it).
 ---
 
 # Balise
@@ -51,15 +51,46 @@ difference between an answer and a guess.
 ## Write when you learn something
 
 When you establish something durable that the vault does not already hold, offer to record
-it with `remember`. Ask first — one line, not a ceremony — and write on a yes.
+it. Ask first, one line, not a ceremony, and write on a yes.
 
 > That behaviour isn't in the vault. Want me to record it?
+
+There are two ways to record, and the difference is how sure you are and whether you know
+where it belongs.
+
+**`propose`: you verified it and know where it goes.** It puts a proposal in front of the
+vault's owner, who accepts, edits or rejects it. First `search` for the page the fact belongs
+on. If one is about the same subject, add claims to it:
+
+```
+propose(scope: "work", target: "azapi-ergw-connection-deletion",
+        claims: ["azapi_update_resource patches the gateway in place and keeps its connections"],
+        evidence: "Applied with azapi_update_resource; both connections stayed Connected throughout.")
+```
+
+If nothing is about that subject, propose a new page instead, with a type the vault uses
+(the refusal lists them if you guess wrong), a hyphenated slug, a title that states the
+finding, a short body, and its claims:
+
+```
+propose(scope: "client-acme", new_page: {type: "gotcha", slug: "acme-er-gateway-sku",
+        title: "ErGw1AZ is rejected in North Central US", body: "..."},
+        claims: ["ErGw1AZ is rejected in North Central US despite being listed"], evidence: "...")
+```
+
+`evidence` is required: say what you ran, saw or checked. It is the first thing the reviewer
+reads. If the page already has a proposal waiting, `propose` refuses; leave it, or `remember`
+the fact instead.
+
+**`remember`: an observation in passing, or you are not sure where it belongs.** It appends
+to your own memory file and is searchable right away (after the next reindex). The owner
+periodically files remembered notes into proposals, so nothing remembered is lost.
 
 ```
 remember(text: "Concurrent deployment PUTs against one account return 409; serialise them", scope: "work")
 ```
 
-### What is worth remembering
+### What is worth recording
 
 A claim that will still be true and still be useful in six months, that someone would
 otherwise have to rediscover the hard way:
@@ -96,9 +127,10 @@ its job — do not retry against a different scope to get around it.
 
 ## What happens to what you write
 
-`remember` appends to your own memory file under `<scope>/memory/<agent>/`. It is committed
-to git, it is attributed to you, and it is visible to the person who owns the vault.
+`remember` appends to your own memory file under `<scope>/memory/<agent>/`; `propose` writes a
+proposal under `review/`. Both are committed to git, attributed to you, and visible to the
+person who owns the vault.
 
-Claims you write may later be proposed as edits to real pages — and a human accepts, edits,
-or rejects each one. **Nothing you write mutates an existing page directly.** Write honestly
-and write plainly; someone will read it.
+A human accepts, edits, or rejects every proposal, whether you wrote it or it was filed from
+your notes. **Nothing you write mutates an existing page directly.** Write honestly and write
+plainly; someone will read it.

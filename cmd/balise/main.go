@@ -491,7 +491,11 @@ func serveCmd(dsn *string) *cobra.Command {
 			outer := http.NewServeMux()
 			outer.Handle("/", api.New(q, pages, spaces, order, defaultsDir,
 				api.WithOwnerPassword(password), api.WithTokenPool(pool), api.WithEmbedder(embedder)))
-			outer.Handle("/mcp", mcp.NewHandler(pool, pages, order, mcpRateLimit, embedder))
+			types, err := registry.Load(filepath.Join(defaultsDir, "types"))
+			if err != nil {
+				return fmt.Errorf("load type registry: %w", err)
+			}
+			outer.Handle("/mcp", mcp.NewHandler(pool, pages, order, types, mcpRateLimit, embedder))
 
 			cmd.Printf("listening on http://%s (API at /api, MCP at /mcp)\n", addr)
 			return http.ListenAndServe(addr, outer)
@@ -603,7 +607,11 @@ func mcpCmd(dsn *string) *cobra.Command {
 			embedder := loadEmbedder(cmd)
 			defer embedder.Close()
 
-			return mcp.RunStdio(ctx, pool, pages, order, token, embedder)
+			types, err := registry.Load(filepath.Join(defaultsDir, "types"))
+			if err != nil {
+				return fmt.Errorf("load type registry: %w", err)
+			}
+			return mcp.RunStdio(ctx, pool, pages, order, types, token, embedder)
 		},
 	}
 	cmd.Flags().BoolVar(&stdio, "stdio", false, "run a stdio MCP session for a local, single-user client")

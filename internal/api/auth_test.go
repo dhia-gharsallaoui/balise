@@ -53,11 +53,13 @@ func newComboServer(t *testing.T, password string) (*httptest.Server, *pgxpool.P
 	require.NoError(t, err)
 	order, err := registry.LoadOrder("../../defaults/order.yaml")
 	require.NoError(t, err)
+	types, err := registry.Load("../../defaults/types")
+	require.NoError(t, err)
 	pages := newGitVault(t)
 
 	outer := http.NewServeMux()
 	outer.Handle("/", api.New(q, pages, spaces, order, "", api.WithOwnerPassword(password)))
-	outer.Handle("/mcp", mcp.NewHandler(pool, pages, order, 0, nil))
+	outer.Handle("/mcp", mcp.NewHandler(pool, pages, order, types, 0, nil))
 	server := httptest.NewServer(outer)
 	t.Cleanup(server.Close)
 	return server, pool

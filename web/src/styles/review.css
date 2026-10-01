@@ -227,6 +227,13 @@
   gap: 4px;
 }
 
+/* An agent's own evidence has no page behind it; it is credited instead of linked. */
+.review-evidence-by {
+  margin: 6px 0 0 16px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
 .review-evidence blockquote {
   margin: 0;
   padding: 2px 0 2px 14px;

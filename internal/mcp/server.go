@@ -30,6 +30,9 @@ type deps struct {
 	// a nil embedder means both tools stay exactly as lexical-only as they
 	// always were, with no error and no behaviour change.
 	embedder *embed.Embedder
+	// types is the page-type registry (defaults/types), which propose validates a new page's
+	// type and folder against. Never nil in production; both transports load it.
+	types *registry.Registry
 }
 
 // newMCPServer builds the *sdk.Server shared by both transports this
@@ -37,8 +40,8 @@ type deps struct {
 // stdio session (stdio.go). Every tool and prompt is registered exactly
 // once, here, so the two transports can never drift out of sync with each
 // other.
-func newMCPServer(pool *pgxpool.Pool, pages store.PageStore, order *registry.Order, embedder *embed.Embedder) *sdk.Server {
-	d := &deps{pool: pool, pages: pages, order: order, embedder: embedder}
+func newMCPServer(pool *pgxpool.Pool, pages store.PageStore, order *registry.Order, types *registry.Registry, embedder *embed.Embedder) *sdk.Server {
+	d := &deps{pool: pool, pages: pages, order: order, embedder: embedder, types: types}
 
 	server := sdk.NewServer(&sdk.Implementation{
 		Name:    "balise",
@@ -51,6 +54,15 @@ func newMCPServer(pool *pgxpool.Pool, pages store.PageStore, order *registry.Ord
 			"file, under <scope>/memory/<agent>/. Requires the remember capability, and " +
 			"scope must be one of the token's own scopes.",
 	}, d.remember)
+
+	sdk.AddTool(server, &sdk.Tool{
+		Name: "propose",
+		Description: "Propose verified knowledge for a human to review: 1-6 short claims either " +
+			"for an existing page (target = its slug, found with search) or for a new page " +
+			"(new_page: type, slug, title, body). Nothing changes until a human accepts it in " +
+			"Review. Use remember for raw observations; use propose for facts you checked that " +
+			"belong on a page. Requires the propose capability; scope must be one of the token's.",
+	}, d.propose)
 
 	sdk.AddTool(server, &sdk.Tool{
 		Name: "search",
@@ -115,10 +127,10 @@ func newMCPServer(pool *pgxpool.Pool, pages store.PageStore, order *registry.Ord
 // counter -- which is the accepted limitation for this single-process
 // deployment, stated here and in the completion report.
 func NewHandler(
-	pool *pgxpool.Pool, pages store.PageStore, order *registry.Order, ratePerMinute int,
-	embedder *embed.Embedder,
+	pool *pgxpool.Pool, pages store.PageStore, order *registry.Order, types *registry.Registry,
+	ratePerMinute int, embedder *embed.Embedder,
 ) http.Handler {
-	server := newMCPServer(pool, pages, order, embedder)
+	server := newMCPServer(pool, pages, order, types, embedder)
 
 	mcpHandler := sdk.NewStreamableHTTPHandler(
 		func(*http.Request) *sdk.Server { return server },

@@ -35,7 +35,9 @@ func newTestDeps(t *testing.T) *deps {
 	require.NoError(t, err)
 	order, err := registry.LoadOrder("../../defaults/order.yaml")
 	require.NoError(t, err)
-	return &deps{pool: pool, pages: pages, order: order}
+	types, err := registry.Load("../../defaults/types")
+	require.NoError(t, err)
+	return &deps{pool: pool, pages: pages, order: order, types: types}
 }
 
 // mintToken creates a live agent token via the same store.CreateToken path
