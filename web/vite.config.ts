@@ -8,9 +8,12 @@ export default defineConfig({
     // Proxy /api to the backend so only ONE port is ever exposed. The Go API stays bound
     // to loopback; the browser talks to Vite, Vite talks to the API over 127.0.0.1. That
     // also means same-origin requests, so CORS never enters the picture.
+    //
+    // BALISE_API_TARGET points the same UI at a different backend, e.g. a long-running
+    // vault service on another port, without touching the `make up` default.
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8099",
+        target: process.env.BALISE_API_TARGET ?? "http://127.0.0.1:8099",
         changeOrigin: false,
       },
     },
