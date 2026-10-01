@@ -132,6 +132,23 @@ func TestCallToolErrorsWhenNoToolUseBlockPresent(t *testing.T) {
 	require.ErrorContains(t, err, "tool_use")
 }
 
+// A tool answer cut off at max_tokens is incomplete JSON that happens to parse, so without
+// reading stop_reason it surfaces as a misleading schema violation (found live: propose_pages
+// lost every new page off the end of a 4096-token answer). It must fail as what it is.
+func TestCallToolReportsAnAnswerCutOffAtMaxTokens(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"stop_reason":"max_tokens","content":[{"type":"tool_use","name":"extract_claims","input":{"keep":[]}}],"usage":{"input_tokens":10,"output_tokens":100}}`))
+	}))
+	defer server.Close()
+
+	client := compile.NewAnthropicClient(server.URL, "test-key", server.Client())
+	_, err := client.CallTool(context.Background(), compile.ToolCall{
+		Model: "claude-sonnet-5", User: "hi", ToolName: "extract_claims",
+		ToolDesc: "test", InputSchema: map[string]any{"type": "object"}, MaxTokens: 100,
+	})
+	require.ErrorContains(t, err, "cut off at the 100-token output limit")
+}
+
 // writeToolUseResponse writes a minimal Messages API success response carrying
 // one tool_use content block plus token usage.
 func writeToolUseResponse(w http.ResponseWriter, toolName, inputJSON string, inputTokens, outputTokens int) {

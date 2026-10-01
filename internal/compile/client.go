@@ -109,7 +109,7 @@ func (c *AnthropicClient) CallTool(ctx context.Context, call ToolCall) (ToolResu
 	if err != nil {
 		return ToolResult{}, fmt.Errorf("read model response: %w", err)
 	}
-	return parseToolResponse(resp.StatusCode, raw, call.ToolName)
+	return parseToolResponse(resp.StatusCode, raw, call.ToolName, call.MaxTokens)
 }
 
 type messagesRequest struct {
@@ -170,8 +170,9 @@ func (c *AnthropicClient) buildRequest(ctx context.Context, call ToolCall) (*htt
 }
 
 type messagesResponse struct {
-	Content []contentBlock `json:"content"`
-	Usage   struct {
+	StopReason string         `json:"stop_reason"`
+	Content    []contentBlock `json:"content"`
+	Usage      struct {
 		InputTokens  int `json:"input_tokens"`
 		OutputTokens int `json:"output_tokens"`
 	} `json:"usage"`
@@ -192,13 +193,20 @@ type apiError struct {
 // parseToolResponse decodes one Messages API response and extracts the tool_use
 // block matching toolName. It is a free function (no receiver) so tests can
 // exercise response parsing directly, without an HTTP round trip.
-func parseToolResponse(status int, raw []byte, toolName string) (ToolResult, error) {
+func parseToolResponse(status int, raw []byte, toolName string, maxTokens int) (ToolResult, error) {
 	var parsed messagesResponse
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return ToolResult{}, fmt.Errorf("parse response (status %d): %w", status, err)
 	}
 	if status != http.StatusOK {
 		return ToolResult{}, apiStatusError(status, raw, parsed.Error)
+	}
+	// An answer cut off at the output limit is truncated JSON that may still parse, so it
+	// would otherwise surface as a misleading schema violation; retrying with the same
+	// budget cannot fix it either, so it fails as what it is.
+	if parsed.StopReason == "max_tokens" {
+		return ToolResult{InputTokens: parsed.Usage.InputTokens, OutputTokens: parsed.Usage.OutputTokens},
+			fmt.Errorf("model answer was cut off at the %d-token output limit; send fewer items per call", maxTokens)
 	}
 	for _, block := range parsed.Content {
 		if block.Type == "tool_use" && block.Name == toolName {
