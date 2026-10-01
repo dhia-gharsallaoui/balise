@@ -143,16 +143,20 @@ func IndexPage(
 	result.Findings = append(result.Findings, tagFindings...)
 	result.Findings = append(result.Findings, validationFindings(ic.Registry, typeName, tokens, fm)...)
 
+	claims, claimFindings := buildClaims(fm.Claims)
+	result.Findings = append(result.Findings, claimFindings...)
+	if ic.Registry.Traits(typeName)["log"] {
+		claims = append(claims, logEntryClaims(page.Body, len(claims))...)
+	}
+
 	doc := buildDocument(fm, documentArgs{
 		uid: uid, slug: slug, scope: scope, typeName: typeName, pagePath: pagePath,
 		body: page.Body, bodyHash: bodyHash, tokens: tokens, gitVersion: gitVersion,
-		typeFingerprint: fingerprint,
+		typeFingerprint: fingerprint, claimsCount: len(claims),
 	}, tags)
 	if err := q.UpsertDocument(ctx, doc); err != nil {
 		return Result{}, fmt.Errorf("index %s: %w", pagePath, err)
 	}
-	claims, claimFindings := buildClaims(fm.Claims)
-	result.Findings = append(result.Findings, claimFindings...)
 	if err := q.ReplaceClaims(ctx, uid, claims); err != nil {
 		return Result{}, fmt.Errorf("claims for %s: %w", pagePath, err)
 	}
@@ -322,6 +326,9 @@ type documentArgs struct {
 	body, bodyHash, gitVersion           string
 	typeFingerprint                      string
 	tokens                               int
+	// claimsCount is every claim written for the page, frontmatter claims plus any derived
+	// from log entries, so the stored count matches what the claims table holds.
+	claimsCount int
 }
 
 // buildDocument assembles the store row for one page.
@@ -331,7 +338,7 @@ func buildDocument(fm frontmatter, args documentArgs, tags []string) store.Docum
 		Path: args.pagePath, Title: orDefault(fm.Title, args.slug),
 		Aliases: fm.Aliases, Tags: tags, Status: fm.Status, Owner: fm.Owner,
 		BodyMD: args.body, BodyHash: args.bodyHash, Tokens: args.tokens,
-		ClaimsCount: len(fm.Claims), Historical: historicalStatuses[fm.Status],
+		ClaimsCount: args.claimsCount, Historical: historicalStatuses[fm.Status],
 		GitVersion: args.gitVersion, TypeFingerprint: args.typeFingerprint,
 	}
 }

@@ -115,3 +115,19 @@ func TestGetReturnsATypeDefThatCannotMutateTheRegistry(t *testing.T) {
 	require.False(t, fieldExists, "the registry's own field map must not be mutated")
 	require.False(t, again.Traits["mutated"], "the registry's own trait map must not be mutated")
 }
+
+// The fingerprint names everything about a type that changes what indexing writes, so the
+// indexer can skip unchanged pages safely. The log trait now decides whether a page's body
+// entries become claims, so toggling it must change the fingerprint, or a memory page
+// indexed before entries were claims would be skipped forever as unchanged.
+func TestFingerprintChangesWithTheLogTrait(t *testing.T) {
+	load := func(traits string) *registry.Registry {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "memory.yaml"),
+			[]byte("name: memory\ntraits: ["+traits+"]\n"), 0o644))
+		reg, err := registry.Load(dir)
+		require.NoError(t, err)
+		return reg
+	}
+	require.NotEqual(t, load("log").Fingerprint("memory"), load("").Fingerprint("memory"))
+}

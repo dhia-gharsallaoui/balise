@@ -475,3 +475,68 @@ func TestDuplicateReferenceToSameTargetCountsOnceForLinkRecovery(t *testing.T) {
 	}
 	require.Equal(t, 1, count, "the same target named twice must count once for link recovery")
 }
+
+// memoryPage is a day's rollup exactly as internal/mcp/remember.go writes it: frontmatter
+// once, then one "- **HH:MM:SS UTC** text" line per remembered note, appended in order. The
+// third entry spans two lines, which remember allows (it appends the text verbatim).
+const memoryPage = `---
+uid: 01MEMORYPAGEUIDXXXXXXXXXXXX
+slug: "2026-10-01"
+type: memory
+scope: work
+title: dapple-controlplane -- 2026-10-01
+agent: dapple-controlplane
+date: "2026-10-01"
+---
+- **06:31:09 UTC** arista.eos eos_config omits a prefix-list line whose seq is already taken
+- **06:52:27 UTC** Dell Enterprise SONiC holds config in sonic-cli; SSH the mgmt IP instead
+- **07:10:00 UTC** Miamisburg spines are Dell Z9864F-ON,
+  not the NVIDIA SN5610 listed in the BOM
+`
+
+func memoryContext(t *testing.T) indexer.Context {
+	t.Helper()
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "memory.yaml"),
+		[]byte("name: memory\nfolder: memory/\ntraits: [log]\nmax_tokens: 6000\n"), 0o644))
+	reg, err := registry.Load(dir)
+	require.NoError(t, err)
+	facets, err := registry.LoadFacets(dir)
+	require.NoError(t, err)
+	return indexer.Context{Registry: reg, Facets: facets,
+		Slugs: map[vault.ScopedSlug]string{}, Aliases: vault.AliasRegistry{}}
+}
+
+// A remembered note has to be findable, or remember is write-only: search, context and the
+// semantic arm all read the claims table, so each log entry becomes one claim. The timestamp
+// is markup, not content, and a continuation line belongs to the entry above it.
+func TestLogEntriesAreIndexedAsClaims(t *testing.T) {
+	q := store.NewQueries(testutil.NewDB(t), store.Scopes{"work"})
+	_, err := indexer.IndexPage(context.Background(), q,
+		"work/memory/dapple-controlplane/2026-10-01.md", memoryPage, "abc", memoryContext(t))
+	require.NoError(t, err)
+
+	page, err := q.GetPage(context.Background(), "work", "2026-10-01")
+	require.NoError(t, err)
+	require.Equal(t, 3, page.ClaimsCount)
+	require.Equal(t, "arista.eos eos_config omits a prefix-list line whose seq is already taken", page.Claims[0].Text)
+	require.Equal(t, "Miamisburg spines are Dell Z9864F-ON, not the NVIDIA SN5610 listed in the BOM", page.Claims[2].Text)
+	require.Equal(t, "active", page.Claims[2].Status)
+
+	hits, err := q.SearchClaims(context.Background(), "Miamisburg spines", false, 10, nil)
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, "memory", hits[0].Type)
+	require.Equal(t, []string{"Miamisburg spines are Dell Z9864F-ON, not the NVIDIA SN5610 listed in the BOM"}, hits[0].MatchedClaims)
+}
+
+// Only log-trait types get entries derived from their body: a bulleted list in an ordinary
+// page is prose, and its claims come from frontmatter alone.
+func TestBodyBulletsOnANonLogPageAreNotClaims(t *testing.T) {
+	q := store.NewQueries(testutil.NewDB(t), store.Scopes{"work"})
+	index(t, q, gotchaPage+"- **06:31:09 UTC** looks like an entry but is prose here\n")
+
+	page, err := q.GetPage(context.Background(), "work", "ergw")
+	require.NoError(t, err)
+	require.Equal(t, 2, page.ClaimsCount)
+}

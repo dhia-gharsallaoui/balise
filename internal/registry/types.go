@@ -179,7 +179,8 @@ func (r *Registry) Errors() []string { return append([]string(nil), r.errors...)
 // This governs indexer's skip-unchanged optimisation: a page is re-evaluated whenever its
 // type's fingerprint changes, even if the page's own content and git version have not. It is
 // deliberately narrow — Description, Folder, StalenessDays, Fields and every trait besides
-// "indexed" are left out because nothing in validationFindings (or EdgesFrom) reads them for
+// "indexed" and "log" are left out ("log" decides whether body entries become claims, see
+// indexer.logEntryClaims) because nothing in validationFindings (or EdgesFrom) reads them for
 // finding purposes today [Fields does feed EdgesFrom's ref-edge detection, a separate,
 // pre-existing staleness gap this fingerprint does not attempt to close]; claim_rules is
 // accepted by the type schema but not yet parsed into TypeDef at all, so it cannot affect a
@@ -188,8 +189,9 @@ func (r *Registry) Errors() []string { return append([]string(nil), r.errors...)
 func (r *Registry) Fingerprint(typeName string) string {
 	_, known := r.types[typeName]
 	maxTokens, maxClaims := r.Limits(typeName)
-	indexed := r.Traits(typeName)["indexed"]
-	return fmt.Sprintf("known=%t;tokens=%d;claims=%d;indexed=%t", known, maxTokens, maxClaims, indexed)
+	traits := r.Traits(typeName)
+	return fmt.Sprintf("known=%t;tokens=%d;claims=%d;indexed=%t;log=%t",
+		known, maxTokens, maxClaims, traits["indexed"], traits["log"])
 }
 
 func compileSchema() (*jsonschema.Schema, error) {
