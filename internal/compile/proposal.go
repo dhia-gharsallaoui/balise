@@ -39,6 +39,24 @@ type Proposal struct {
 	// field when a fresh extraction supersedes an older pending proposal for the same
 	// target — the reason just says so instead of describing a human's rejection.
 	Rejected *ProposalRejection `yaml:"rejected,omitempty"`
+	// Page is set only on a KindNewPage proposal: the page acceptance will create, at
+	// <scope>/<type folder>/<target>.md. Its claims are not repeated here; they are
+	// Change.Claims.Add, applied to an empty page exactly as an add is applied to an existing
+	// one, so accept, edit-accept and the review diff need no second claims path.
+	Page *ProposalPage `yaml:"page,omitempty"`
+}
+
+// Proposal kinds this package produces (04 section 3.5 names the full vocabulary).
+const (
+	KindClaims  = "claims"
+	KindNewPage = "new_page"
+)
+
+// ProposalPage describes the page a new_page proposal creates.
+type ProposalPage struct {
+	Type  string `yaml:"type"`
+	Title string `yaml:"title"`
+	Body  string `yaml:"body"`
 }
 
 // ProposalRejection is the reason a proposal was turned down, nested under `rejected:` so
@@ -112,7 +130,7 @@ func BuildProposal(pagePath, scope, slug string, change ClaimsChange, confidence
 	lines := strings.Split(body, "\n")
 	return Proposal{
 		ID:         vault.NewUID(),
-		Kind:       "claims",
+		Kind:       KindClaims,
 		Scope:      scope,
 		Target:     slug,
 		Confidence: confidence,

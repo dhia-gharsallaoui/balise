@@ -258,4 +258,44 @@ describe("ReviewScreen", () => {
     render(<ReviewScreen onOpenPage={vi.fn()} />);
     expect(await screen.findByText(/nothing is waiting for review/i)).toBeTruthy();
   });
+
+  it("shows a new_page proposal as the page it creates, and opens the memory page its evidence cites", async () => {
+    const newPageList: ReviewListResponse = {
+      proposals: [{
+        id: "p-new", kind: "new_page", scope: "client-engram", target: "miamisburg-fabric",
+        target_title: "Miamisburg spines are Dell, not NVIDIA", confidence: "likely",
+        created_by: "compile:2026-10-01T08:00:00Z",
+      }],
+    };
+    const newPageDetail: ReviewDetail = {
+      id: "p-new", kind: "new_page", scope: "client-engram", target: "miamisburg-fabric",
+      target_title: "Miamisburg spines are Dell, not NVIDIA", confidence: "likely",
+      created_by: "compile:2026-10-01T08:00:00Z",
+      evidence: [{ source: "client-engram/memory/dapple-controlplane/2026-10-01.md", text: "Spines are Dell Z9864F-ON." }],
+      before: [],
+      after: [{ id: "c1", text: "Miamisburg spines are Dell Z9864F-ON switches", status: "active", mark: "added" }],
+      new_page: {
+        type: "state", title: "Miamisburg spines are Dell, not NVIDIA",
+        path: "client-engram/state/miamisburg-fabric.md", body: "The site's spines differ from the BOM.",
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/review")) return jsonResponse(newPageList);
+      if (url.includes("/api/review/p-new")) return jsonResponse(newPageDetail);
+      throw new Error(`unexpected fetch: ${url}`);
+    }));
+    const onOpenPage = vi.fn();
+    render(<ReviewScreen onOpenPage={onOpenPage} />);
+
+    expect(await screen.findByRole("region", { name: "New page" })).toBeTruthy();
+    expect(screen.getByText("The site's spines differ from the BOM.")).toBeTruthy();
+    expect(screen.getAllByText(/client-engram\/state\/miamisburg-fabric\.md/).length).toBeGreaterThan(0);
+    // No "Current" column: there is no page yet to compare against.
+    expect(screen.queryByRole("heading", { name: "Current" })).toBeNull();
+    expect(screen.getByText("Miamisburg spines are Dell Z9864F-ON switches")).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: /Open client-engram\/memory/ }));
+    expect(onOpenPage).toHaveBeenCalledWith("client-engram", "2026-10-01", "2026-10-01");
+  });
 });

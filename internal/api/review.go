@@ -72,6 +72,8 @@ type reviewDetailJSON struct {
 	Evidence    []reviewEvidenceJSON `json:"evidence"`
 	Before      []reviewClaimJSON    `json:"before"`
 	After       []reviewClaimJSON    `json:"after"`
+	// NewPage is set only for a new_page proposal: the page accepting it creates.
+	NewPage *reviewNewPageJSON `json:"new_page,omitempty"`
 }
 
 func (s *server) handleReviewList(w http.ResponseWriter, r *http.Request) {
@@ -111,13 +113,22 @@ func (s *server) reviewQueue(ctx context.Context) ([]reviewListJSON, error) {
 		}
 		items = append(items, reviewListJSON{
 			ID: proposal.ID, Kind: proposal.Kind, Scope: proposal.Scope, Target: proposal.Target,
-			TargetTitle: s.pageTitle(ctx, proposal.Scope, proposal.Target),
+			TargetTitle: s.proposalTitle(ctx, proposal),
 			Confidence:  confidenceWord(proposal.Confidence),
 			CreatedBy:   proposal.CreatedBy,
 		})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 	return items, nil
+}
+
+// proposalTitle is the title the queue and detail show for a proposal: the proposed page's
+// own title for a new page (no indexed page answers to its slug yet), otherwise pageTitle.
+func (s *server) proposalTitle(ctx context.Context, proposal compile.Proposal) string {
+	if proposal.Kind == compile.KindNewPage && proposal.Page != nil && proposal.Page.Title != "" {
+		return proposal.Page.Title
+	}
+	return s.pageTitle(ctx, proposal.Scope, proposal.Target)
 }
 
 // pageTitle is a best-effort, read-only lookup through the index for display purposes only —
@@ -140,14 +151,22 @@ func (s *server) handleReviewItem(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = proposalPath
 
-	pagePath, page, _, err := findPageBySlug(s.pages, proposal.Scope, proposal.Target)
-	if err != nil {
+	// The detail view describes the target without the accept-time checks: a proposal that
+	// has gone stale, or whose new slug has since been taken, must still be viewable so the
+	// reviewer can see it and reject it.
+	var target reviewTarget
+	if proposal.Kind == compile.KindNewPage {
+		var status int
+		if target, status, err = s.describeNewPage(proposal); err != nil {
+			writeError(w, status, err.Error())
+			return
+		}
+	} else if target.path, target.page, target.version, err = findPageBySlug(s.pages, proposal.Scope, proposal.Target); err != nil {
 		writeError(w, http.StatusNotFound, "target page not found")
 		return
 	}
-	_ = pagePath
 
-	existing, err := existingClaims(page)
+	existing, err := existingClaims(target.page)
 	if err != nil {
 		writeServerError(w, r, err)
 		return
@@ -160,12 +179,13 @@ func (s *server) handleReviewItem(w http.ResponseWriter, r *http.Request) {
 
 	detail := reviewDetailJSON{
 		ID: proposal.ID, Kind: proposal.Kind, Scope: proposal.Scope, Target: proposal.Target,
-		TargetTitle: s.pageTitle(r.Context(), proposal.Scope, proposal.Target),
+		TargetTitle: s.proposalTitle(r.Context(), proposal),
 		Confidence:  confidenceWord(proposal.Confidence),
 		CreatedBy:   proposal.CreatedBy,
 		Evidence:    evidenceJSON(proposal.Evidence),
 		Before:      claimsJSON(wrapUnchanged(existing)),
 		After:       claimsJSON(applied),
+		NewPage:     newPageJSON(proposal, target),
 	}
 	writeJSON(w, http.StatusOK, detail)
 }
@@ -183,23 +203,12 @@ func (s *server) handleReviewAccept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pagePath, page, version, err := findPageBySlug(s.pages, proposal.Scope, proposal.Target)
+	target, status, err := s.resolveReviewTarget(proposal)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "target page not found")
+		writeError(w, status, err.Error())
 		return
 	}
-
-	// Fix 1, part B: verify the target still matches what this proposal was built against
-	// before applying anything. An empty proposal.TargetVersion (a proposal built before
-	// this field existed) skips the check, the same way PageStore.Write treats an empty
-	// ifVersion as "nothing to compare, allow it" — this only closes the gap for proposals
-	// that recorded a baseline, which every proposal from this point on does.
-	if proposal.TargetVersion != "" && proposal.TargetVersion != version {
-		writeError(w, http.StatusConflict, fmt.Sprintf(
-			"proposal %s is stale: %s/%s changed since this proposal was built (expected version %s, found %s); reject this proposal and re-run extract-claims",
-			proposal.ID, proposal.Scope, proposal.Target, proposal.TargetVersion, version))
-		return
-	}
+	pagePath, page := target.path, target.page
 
 	existing, err := existingClaims(page)
 	if err != nil {
@@ -305,20 +314,13 @@ func (s *server) handleReviewEditAccept(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	pagePath, page, version, err := findPageBySlug(s.pages, proposal.Scope, proposal.Target)
+	// The same target resolution, and so the same staleness and new-page checks, as accept.
+	target, status, err := s.resolveReviewTarget(proposal)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "target page not found")
+		writeError(w, status, err.Error())
 		return
 	}
-
-	// Identical to handleReviewAccept's own check — see that handler's comment for why an
-	// empty proposal.TargetVersion skips rather than refuses.
-	if proposal.TargetVersion != "" && proposal.TargetVersion != version {
-		writeError(w, http.StatusConflict, fmt.Sprintf(
-			"proposal %s is stale: %s/%s changed since this proposal was built (expected version %s, found %s); reject this proposal and re-run extract-claims",
-			proposal.ID, proposal.Scope, proposal.Target, proposal.TargetVersion, version))
-		return
-	}
+	pagePath, page := target.path, target.page
 
 	existing, err := existingClaims(page)
 	if err != nil {

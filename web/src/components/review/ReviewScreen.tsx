@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { ArrowSquareOut, CaretLeft, Warning } from "@phosphor-icons/react";
 import { acceptReview, editAcceptReview, fetchReview, fetchReviewItem, rejectReview } from "../../lib/api";
-import type { ReviewClaim, ReviewClaimEdit, ReviewDetail, ReviewListItem } from "../../lib/types";
+import type { ReviewClaim, ReviewClaimEdit, ReviewDetail, ReviewListItem, ReviewNewPage } from "../../lib/types";
 import { plural } from "../../lib/plural";
 import { EmptyState } from "../ui/EmptyState";
 import { RichTitle } from "../ui/RichTitle";
@@ -196,7 +196,14 @@ function EvidenceList({ detail, onOpenPage }: EvidenceProps) {
             <button
               type="button"
               className="btn btn-quiet btn-sm review-open-page"
-              onClick={() => onOpenPage(detail.scope, detail.target, detail.target_title)}
+              onClick={() => {
+                const cited = citedPage(ev.source);
+                if (ev.source === detail.target || cited.slug === detail.target) {
+                  onOpenPage(detail.scope, detail.target, detail.target_title);
+                } else {
+                  onOpenPage(cited.scope, cited.slug, cited.slug);
+                }
+              }}
             >
               Open {ev.source}
               <ArrowSquareOut size={14} weight="regular" aria-hidden="true" />
@@ -204,6 +211,38 @@ function EvidenceList({ detail, onOpenPage }: EvidenceProps) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+// The page an evidence citation points at, read from its vault path (<scope>/.../<slug>.md).
+// Evidence usually cites the proposal's own target, but a proposal built from remembered notes
+// cites the memory page each note came from, which is the page worth opening.
+function citedPage(source: string): { scope: string; slug: string } {
+  const parts = source.split("/");
+  return { scope: parts[0], slug: (parts[parts.length - 1] ?? "").replace(/\.md$/, "") };
+}
+
+interface NewPagePreviewProps {
+  page: ReviewNewPage;
+}
+
+// A new_page proposal has no current page to diff against, so the reviewer sees what accepting
+// will create: its type, where it will live, and the body it will carry.
+function NewPagePreview({ page }: NewPagePreviewProps) {
+  return (
+    <section className="review-newpage" aria-label="New page">
+      <h3 className="review-heading">New page</h3>
+      <dl className="review-newpage-meta">
+        <dt>Type</dt>
+        <dd>
+          <span className="type-dot" data-type={page.type} aria-hidden="true" />
+          {page.type}
+        </dd>
+        <dt>Creates</dt>
+        <dd className="review-newpage-path">{page.path}</dd>
+      </dl>
+      <div className="review-newpage-body">{page.body}</div>
     </section>
   );
 }
@@ -644,16 +683,25 @@ export function ReviewScreen({ onOpenPage }: ReviewScreenProps) {
                 <RichTitle title={detail.target_title} />
               </h2>
               <p className="review-detail-path">
-                {detail.target} · {detail.scope}
+                {detail.new_page ? detail.new_page.path : detail.target} · {detail.scope}
               </p>
             </header>
 
             <EvidenceList detail={detail} onOpenPage={onOpenPage} />
 
-            <section className="review-claims" aria-label="Claims">
-              <ClaimList title="Current" claims={detail.before} />
-              <ClaimList title="Proposed" claims={detail.after} previous={detail.before} />
-            </section>
+            {detail.new_page ? (
+              <>
+                <NewPagePreview page={detail.new_page} />
+                <section className="review-claims review-claims-single" aria-label="Claims">
+                  <ClaimList title="Claims" claims={detail.after} previous={detail.before} />
+                </section>
+              </>
+            ) : (
+              <section className="review-claims" aria-label="Claims">
+                <ClaimList title="Current" claims={detail.before} />
+                <ClaimList title="Proposed" claims={detail.after} previous={detail.before} />
+              </section>
+            )}
 
             {actionError && <ErrorBanner message={actionError} />}
 

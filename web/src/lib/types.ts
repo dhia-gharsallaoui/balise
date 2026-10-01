@@ -186,6 +186,16 @@ export interface ReviewDetail {
   evidence: ReviewEvidence[];
   before: ReviewClaim[];
   after: ReviewClaim[];
+  // Set only for a new_page proposal: the page accepting it creates. Its claims are `after`
+  // (every one marked added); `before` is empty because the page does not exist yet.
+  new_page?: ReviewNewPage | null;
+}
+
+export interface ReviewNewPage {
+  type: string;
+  title: string;
+  path: string;
+  body: string;
 }
 
 export interface ReviewAcceptResult {

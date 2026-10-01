@@ -62,20 +62,115 @@ func root() *cobra.Command {
 	cmd := &cobra.Command{Use: "balise", Short: "A knowledge system for agents"}
 	cmd.PersistentFlags().StringVar(&dsn, "dsn", envOr("BALISE_DSN", defaultDSN), "Postgres DSN")
 
-	cmd.AddCommand(initCmd(), importCmd(), reindexCmd(&dsn), serveCmd(&dsn), compileCmd(), tokenCmd(&dsn), mcpCmd(&dsn))
+	cmd.AddCommand(initCmd(), importCmd(), reindexCmd(&dsn), serveCmd(&dsn), compileCmd(&dsn), tokenCmd(&dsn), mcpCmd(&dsn))
 	return cmd
 }
 
 // compileCmd groups the LLM compile tasks (section 9) under "balise compile ...".
 // extract_claims is the first of these; further compile tasks add subcommands
 // here rather than growing extractClaimsCmd.
-func compileCmd() *cobra.Command {
+func compileCmd(dsn *string) *cobra.Command {
 	// SilenceUsage: a runtime failure partway through a compile task (a bad
 	// page, a store error) is not a cobra argument-parsing mistake, so cobra's
 	// usage block must not bury the actual error underneath it (fix 4).
 	cmd := &cobra.Command{Use: "compile", Short: "Run an LLM compile task against the vault", SilenceUsage: true}
-	cmd.AddCommand(extractClaimsCmd())
+	cmd.AddCommand(extractClaimsCmd(), proposePagesCmd(dsn))
 	return cmd
+}
+
+// proposePagesCmd wires compile.RunProposePages to the CLI: every note agents remembered and
+// no run has decided yet becomes a review/ proposal (attach to an existing page, or a new
+// page), or is recorded as skipped. It needs the index for candidate matching, so unlike
+// extract-claims it opens the database, and loads the embedder when one is configured.
+func proposePagesCmd(dsn *string) *cobra.Command {
+	var scope, model, defaults string
+	var limit, batch int
+	var dryRun bool
+	cmd := &cobra.Command{
+		Use:           "propose-pages <vault>",
+		Short:         "Propose where remembered notes belong: on an existing page, or on a new one",
+		Args:          cobra.ExactArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			pages, err := store.OpenGit(args[0])
+			if err != nil {
+				return err
+			}
+			defaultsDir, cleanup, err := resolveDefaultsDir(cmd, "defaults", defaults, args[0])
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			reg, err := registry.Load(filepath.Join(defaultsDir, "types"))
+			if err != nil {
+				return fmt.Errorf("load type registry: %w", err)
+			}
+			vaultScopes, err := store.DiscoverVaultScopes(pages)
+			if err != nil {
+				return err
+			}
+			pool, _, err := openQueries(ctx, *dsn, vaultScopes)
+			if err != nil {
+				return err
+			}
+			defer pool.Close()
+			embedder := loadEmbedder(cmd)
+			defer embedder.Close()
+
+			var client compile.LLMClient
+			if !dryRun {
+				if client, err = compile.NewAnthropicClientFromEnv(); err != nil {
+					return fmt.Errorf("build LLM client: %w", err)
+				}
+			}
+			report, runErr := compile.RunProposePages(ctx, pages, reg,
+				cli.NewIndexCandidateFinder(pool, reg, embedder), client,
+				compile.ProposeOptions{Scope: scope, Limit: limit, BatchSize: batch, DryRun: dryRun, Model: model})
+			printProposePagesReport(cmd, report, dryRun)
+			if runErr != nil {
+				return fmt.Errorf("propose-pages: %w", runErr)
+			}
+			if _, failed, _, _ := report.Totals(); failed > 0 && failed == len(report.Batches) {
+				return fmt.Errorf("propose-pages: every batch failed")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&scope, "scope", "", "restrict to one scope (default: every scope)")
+	cmd.Flags().IntVar(&limit, "limit", 0, "cap the number of notes attempted (0 = unlimited)")
+	cmd.Flags().IntVar(&batch, "batch", 0, "notes per model call (0 = default)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "render prompts and exit without calling the model or writing anything")
+	cmd.Flags().StringVar(&model, "model", defaultExtractClaimsModel, "model name passed to the LLM client")
+	cmd.Flags().StringVar(&defaults, "defaults", "defaults", defaultsFlagHelp)
+	return cmd
+}
+
+// printProposePagesReport prints one line per batch and the run's totals, so a real run's
+// cost and output are always visible.
+func printProposePagesReport(cmd *cobra.Command, report compile.ProposeReport, dryRun bool) {
+	cmd.Printf("notes waiting: %d\n", report.NotesPending)
+	for _, b := range report.Batches {
+		switch {
+		case dryRun:
+			cmd.Printf("dry-run %s (%d notes)\n%s\n", b.Scope, b.Notes, b.Prompt)
+		case b.Failed:
+			cmd.Printf("FAIL  %s (%d notes): %s\n", b.Scope, b.Notes, b.FailReason)
+		default:
+			deferred := ""
+			if b.Deferred > 0 {
+				deferred = fmt.Sprintf(", %d deferred (target already in review)", b.Deferred)
+			}
+			cmd.Printf("done  %s (%d notes) -> %d proposal(s)%s (in=%d out=%d)\n",
+				b.Scope, b.Notes, len(b.Proposals), deferred, b.InputTokens, b.OutputTokens)
+		}
+	}
+	proposals, failed, in, out := report.Totals()
+	cmd.Printf("summary: %d proposal(s), %d failed batch(es)\ntotal tokens: %d in, %d out\n", proposals, failed, in, out)
+	for _, sha := range report.CommitSHAs {
+		cmd.Printf("committed %s\n", sha[:8])
+	}
 }
 
 // extractClaimsCmd wires compile.Run to the CLI. --dry-run and --limit are the
