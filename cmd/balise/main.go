@@ -57,10 +57,23 @@ func main() {
 	}
 }
 
+// resolveDSN is --dsn when it is given, else $BALISE_DSN, else the local development default.
+func resolveDSN(flag string) string {
+	if flag != "" {
+		return flag
+	}
+	return envOr("BALISE_DSN", defaultDSN)
+}
+
 func root() *cobra.Command {
 	var dsn string
-	cmd := &cobra.Command{Use: "balise", Short: "A knowledge system for agents"}
-	cmd.PersistentFlags().StringVar(&dsn, "dsn", envOr("BALISE_DSN", defaultDSN), "Postgres DSN")
+	cmd := &cobra.Command{
+		Use: "balise", Short: "A knowledge system for agents",
+		// The DSN is resolved here, not as the flag's default: cobra prints flag defaults in
+		// every usage text (a failed reindex prints one), and $BALISE_DSN holds a password.
+		PersistentPreRun: func(*cobra.Command, []string) { dsn = resolveDSN(dsn) },
+	}
+	cmd.PersistentFlags().StringVar(&dsn, "dsn", "", "Postgres DSN (default $BALISE_DSN, else "+defaultDSN+")")
 
 	cmd.AddCommand(initCmd(), importCmd(), reindexCmd(&dsn), serveCmd(&dsn), compileCmd(&dsn), tokenCmd(&dsn), mcpCmd(&dsn))
 	return cmd

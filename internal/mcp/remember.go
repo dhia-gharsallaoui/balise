@@ -77,7 +77,9 @@ func (d *deps) remember(ctx context.Context, req *sdk.CallToolRequest, in Rememb
 		existing = nil
 	}
 
-	slug := vault.SlugFromFilename(path.Base(p))
+	// The file is memory/<agent>/<date>.md, so its name alone repeats across agents, and slugs
+	// are unique per scope: the agent is part of the slug.
+	slug := tok.Name + "-" + vault.SlugFromFilename(path.Base(p))
 	entry := formatMemoryEntry(when, in.Text)
 
 	// A brand-new day's file gets its frontmatter (defaults/types/memory.yaml: type
