@@ -173,3 +173,26 @@ func countAuditRows(t *testing.T, pool *pgxpool.Pool) int {
 	require.NoError(t, pool.QueryRow(context.Background(), "select count(*) from audit_log").Scan(&n))
 	return n
 }
+
+// Two agents remembering on the same day in one scope wrote memory/<agent>/<date>.md files that
+// both took the slug <date>, and slugs are unique per scope: the second one broke every reindex
+// of the vault. Each agent's day file gets its own slug.
+func TestRememberGivesEachAgentsDayFileItsOwnSlug(t *testing.T) {
+	d := newTestDeps(t)
+	ctx := context.Background()
+	a := mintToken(t, d.pool, "tech-lead", []string{"work"}, []string{"read", "remember"})
+	b := mintToken(t, d.pool, "engineer", []string{"work"}, []string{"read", "remember"})
+
+	_, outA, err := d.remember(ctx, reqWithToken(a), RememberInput{Text: "a note", Scope: "work"})
+	require.NoError(t, err)
+	_, outB, err := d.remember(ctx, reqWithToken(b), RememberInput{Text: "b note", Scope: "work"})
+	require.NoError(t, err)
+
+	require.NotEqual(t, outA.Slug, outB.Slug, "two agents' same-day files must not share a slug")
+	require.True(t, strings.HasPrefix(outA.Slug, "tech-lead-"), "slug %q names its agent", outA.Slug)
+	require.True(t, strings.HasPrefix(outB.Slug, "engineer-"), "slug %q names its agent", outB.Slug)
+
+	data, _, err := d.pages.Read(outA.Path)
+	require.NoError(t, err)
+	require.Contains(t, string(data), "slug: "+outA.Slug, "the frontmatter carries the same slug the indexer will use")
+}
